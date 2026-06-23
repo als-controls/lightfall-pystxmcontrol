@@ -6,7 +6,11 @@
 - Lightfall's own venv is 3.14; this spike uses 3.12 per pystxmcontrol README cap.
 - **RESOLVED (Task 6):** Phase 1 uses Lightfall's 3.14 venv. See section below.
 
-## Pinned versions (from `pip freeze`)
+## Pinned versions — Phase 0 (3.12 spike venv only)
+
+> These versions are the dedicated **3.12 spike venv** used for Phase 0 (Tasks 1–5).
+> The Phase 1 Lightfall 3.14 venv has DIFFERENT versions (e.g. `bluesky==1.14.6`) —
+> see the "Task 6 — Phase 1 interpreter resolution" section below for the 3.14 set.
 
 ```
 bluesky==1.15.1
@@ -128,11 +132,28 @@ C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python \
     -m pip install python-usbtmc pyusb pyserial
 ```
 
-### numpy bump
+### numpy bump — HARD pin conflict (runtime-benign today, but read this)
 
-numpy was bumped 2.2.6 -> 2.3.5 by ophyd-async's dependency pull.
-`fvgp`, `gpcam`, and `hgdl` pin `numpy~=2.2.6` and emit pip resolver warnings,
-but these are soft conflicts only; `import lightfall` is unaffected.
+Installing ophyd-async bumped numpy **2.2.6 -> 2.3.5** in Lightfall's 3.14 venv.
+This is a genuine **mutually-exclusive metadata pin conflict**, not just a warning:
+
+- `pydantic-numpy 9.0.1` (transitive dep of ophyd-async) requires **`numpy~=2.3.5`** (>=2.3.5,<2.4)
+- `gpcam` / `fvgp` / `hgdl` (already in Lightfall's venv) require **`numpy~=2.2.6`** (>=2.2.6,<2.3)
+
+No single numpy version satisfies both. The venv currently sits at 2.3.5 (ophyd-async's side).
+
+**Runtime status (verified 2026-06-23):** at numpy 2.3.5, `import lightfall`, `import gpcam`
+(8.2.9), `import fvgp`, and `from gpcam import GPOptimizer` ALL succeed — gpcam's `~=2.2.6`
+pin is conservative and its code runs fine on 2.3.5. So the conflict is currently
+declaration-only, not a functional break.
+
+**Risk / guidance:** a future `pip install`/`pip install --upgrade` that re-resolves against
+gpcam's pin could silently DOWNGRADE numpy to 2.2.x and then break ophyd-async's
+pydantic-numpy (or vice versa). If this venv must stay stable, pin `numpy>=2.3.5,<2.4`
+explicitly. A rollback snapshot of the pre-Task-6 freeze is at
+`_lightfall_venv_freeze_pre_task6.txt` (untracked). Longer term, a dedicated venv for the
+pystxmcontrol/ophyd-async integration (separate from gpcam-based adaptive work) avoids the
+clash entirely — flag for Ron's decision.
 
 ### Combined import verification (the crux)
 
