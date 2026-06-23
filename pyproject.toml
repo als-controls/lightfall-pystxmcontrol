@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lightfall-pystxmcontrol"
+dynamic = ["version"]
+description = "ophyd-async wrappers exposing pystxmcontrol devices to Lightfall"
+requires-python = ">=3.10"
+dependencies = ["ophyd-async", "bluesky", "numpy"]
+
+[project.optional-dependencies]
+# pystxmcontrol installed separately (see NOTES-environment.md); kept optional
+# so the wrappers can be unit-tested against a stub if needed.
+hardware = ["pystxmcontrol"]
+test = ["pytest", "pytest-asyncio"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lightfall_pystxmcontrol"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
