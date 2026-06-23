@@ -2,11 +2,9 @@
 
 ## Interpreter / venv
 
-- Python 3.12 (`py -3.12`), dedicated venv at `.venv/` inside repo.
+- Python 3.12 (`py -3.12`), dedicated venv at `.venv/` inside repo (Phase 0 only).
 - Lightfall's own venv is 3.14; this spike uses 3.12 per pystxmcontrol README cap.
-- **OPEN reconciliation item (Task 6):** Phase 1 must confirm an interpreter where
-  lightfall (3.14) + pystxmcontrol.drivers + ophyd_async all import; likely 3.14
-  with `pip install -e ./_pystxmcontrol_src --no-deps`.
+- **RESOLVED (Task 6):** Phase 1 uses Lightfall's 3.14 venv. See section below.
 
 ## Pinned versions (from `pip freeze`)
 
@@ -95,3 +93,101 @@ daq getPoint shape: (1,)
 
 The six "not available" lines are expected; they are warnings from the lazy-import
 guard, not errors. The motor and DAQ lines confirm the sim path works.
+
+---
+
+## Task 6 -- Phase 1 interpreter resolution
+
+**Chosen interpreter:** Lightfall's existing 3.14 venv at
+`C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python` (Python 3.14.0).
+All subsequent Phase 1 work uses this interpreter for `.venv/Scripts/python`.
+
+### Install sequence (all against the 3.14 lightfall venv)
+
+```bash
+# 1. Rollback snapshot (untracked, gitignored)
+C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python \
+    -m pip freeze > _lightfall_venv_freeze_pre_task6.txt
+
+# 2. ophyd-async (cp314 native wheel available)
+C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python \
+    -m pip install ophyd-async
+
+# 3. Patch pystxmcontrol pyproject.toml: relaxed requires-python
+#    _pystxmcontrol_src/pyproject.toml: ">=3.9,<3.13" -> ">=3.9"
+#    (GUI deps still blocked by --no-deps; the upstream cap is driven by PySide6
+#     and other GUI wheels, not the driver modules we need.)
+
+# 4. Install patched pystxmcontrol editable, no-deps
+C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python \
+    -m pip install -e _pystxmcontrol_src --no-deps
+
+# 5. Extra deps needed by xpsMotor / keysight53230A on 3.14
+#    (not in lightfall's venv before this task)
+C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python \
+    -m pip install python-usbtmc pyusb pyserial
+```
+
+### numpy bump
+
+numpy was bumped 2.2.6 -> 2.3.5 by ophyd-async's dependency pull.
+`fvgp`, `gpcam`, and `hgdl` pin `numpy~=2.2.6` and emit pip resolver warnings,
+but these are soft conflicts only; `import lightfall` is unaffected.
+
+### Combined import verification (the crux)
+
+```
+$ python -c "import pystxmcontrol.drivers.xpsMotor, pystxmcontrol.drivers.keysight53230A, ophyd_async, lightfall; print('OK on 3.14')"
+pystxmcontrol.drivers.epicsMotor not available: No module named 'epics'
+pystxmcontrol.drivers.nptController not available: No module named 'pylibftdi'
+pystxmcontrol.drivers.bcsController not available: No module named 'pylibftdi'
+pystxmcontrol.drivers.mmcController not available: No module named 'pylibftdi'
+pystxmcontrol.drivers.fccd_control not available: No module named 'matplotlib'
+pystxmcontrol.drivers.mclController not available: No module named 'matplotlib'
+pystxmcontrol.drivers.areaDetector not available: No module named 'epics'
+pystxmcontrol.drivers.E712Controller not available: No module named 'pipython'
+pystxmcontrol.drivers.xspress3 not available: No module named 'epics'
+SmarAct SDK not installed.
+Aerotech SDK not installed.
+OK on 3.14
+```
+
+The "not available" lines are expected lazy-import guard warnings; they are NOT errors.
+`import lightfall` succeeds (no regression from the numpy bump or ophyd-async install).
+
+### Plugin import verification
+
+```
+$ python -m pip install -e C:/Users/rp/PycharmProjects/ncs/lightfall-pystxmcontrol --no-deps
+Successfully installed lightfall-pystxmcontrol-0.1.dev5+g12a3dbd1f
+
+$ python -c "import lightfall_pystxmcontrol; print('plugin importable')"
+plugin importable
+```
+
+### Summary of extra deps added to lightfall's 3.14 venv
+
+| Package | Version | Needed by |
+|---|---|---|
+| `ophyd-async` | 0.19.2 | our wrappers |
+| `colorlog` | 6.10.1 | ophyd-async |
+| `pydantic-numpy` | 9.0.1 | ophyd-async |
+| `ruamel-yaml` | 0.18.0 | ophyd-async |
+| `scanspec` | 1.0.0 | ophyd-async |
+| `semver` | 3.0.4 | ophyd-async |
+| `compress-pickle` | 2.1.0 | ophyd-async |
+| `velocity-profile` | 1.0.0 | ophyd-async |
+| `numpy` | 2.3.5 | bumped from 2.2.6 by ophyd-async |
+| `python-usbtmc` | 0.8 | keysight53230A -> keysightCounter |
+| `pyusb` | 1.3.1 | python-usbtmc -> usb.core |
+| `pyserial` | 3.5 | keysight53230A -> shutter |
+| `pystxmcontrol` | 1.0 (editable) | our wrappers |
+| `lightfall-pystxmcontrol` | 0.1.dev5 (editable) | this package |
+
+### Patches applied to _pystxmcontrol_src
+
+1. `pystxmcontrol/drivers/__init__.py`: lazy-import guard (Task 1, preserved).
+2. `pyproject.toml`: `requires-python` relaxed from `">=3.9,<3.13"` to `">=3.9"`
+   so editable install succeeds on Python 3.14. The 3.12 cap in the upstream README
+   is driven by GUI wheels (PySide6 etc.); `--no-deps` skips all GUI deps so 3.14
+   works cleanly for the driver modules.
