@@ -1,0 +1,9 @@
+.venv/
+_pystxmcontrol_src/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
