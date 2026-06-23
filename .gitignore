@@ -1,5 +1,6 @@
 .venv/
 _pystxmcontrol_src/
+_lightfall_venv_freeze_pre_task6.txt
 __pycache__/
 *.pyc
 *.pyo
