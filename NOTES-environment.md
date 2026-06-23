@@ -132,28 +132,29 @@ C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python \
     -m pip install python-usbtmc pyusb pyserial
 ```
 
-### numpy bump — HARD pin conflict (runtime-benign today, but read this)
+### numpy bump — metadata pin conflict (NOT a Lightfall-core dep; runtime-benign)
 
-Installing ophyd-async bumped numpy **2.2.6 -> 2.3.5** in Lightfall's 3.14 venv.
-This is a genuine **mutually-exclusive metadata pin conflict**, not just a warning:
+Installing ophyd-async bumped numpy **2.2.6 -> 2.3.5** in this particular Lightfall 3.14 venv.
+There is a **mutually-exclusive metadata pin** between two stacks:
 
 - `pydantic-numpy 9.0.1` (transitive dep of ophyd-async) requires **`numpy~=2.3.5`** (>=2.3.5,<2.4)
-- `gpcam` / `fvgp` / `hgdl` (already in Lightfall's venv) require **`numpy~=2.2.6`** (>=2.2.6,<2.3)
+- `gpcam` / `fvgp` / `hgdl` require **`numpy~=2.2.6`** (>=2.2.6,<2.3)
 
-No single numpy version satisfies both. The venv currently sits at 2.3.5 (ophyd-async's side).
+**Important attribution:** `gpcam`/`fvgp`/`hgdl` are **NOT dependencies of Lightfall** — they
+do not appear in `lightfall/pyproject.toml`. In this venv they are `Required-by: tsuchinoko`
+(Ron's separate gpCAM-based adaptive-experiment app, which happens to be installed in the same
+venv). **A clean Lightfall venv without tsuchinoko + ophyd-async has no numpy conflict at all.**
+The clash is tsuchinoko's gpCAM stack ↔ ophyd-async, not Lightfall ↔ ophyd-async.
 
 **Runtime status (verified 2026-06-23):** at numpy 2.3.5, `import lightfall`, `import gpcam`
 (8.2.9), `import fvgp`, and `from gpcam import GPOptimizer` ALL succeed — gpcam's `~=2.2.6`
-pin is conservative and its code runs fine on 2.3.5. So the conflict is currently
+pin is conservative and its code runs fine on 2.3.5. So even in the shared venv the conflict is
 declaration-only, not a functional break.
 
-**Risk / guidance:** a future `pip install`/`pip install --upgrade` that re-resolves against
-gpcam's pin could silently DOWNGRADE numpy to 2.2.x and then break ophyd-async's
-pydantic-numpy (or vice versa). If this venv must stay stable, pin `numpy>=2.3.5,<2.4`
-explicitly. A rollback snapshot of the pre-Task-6 freeze is at
-`_lightfall_venv_freeze_pre_task6.txt` (untracked). Longer term, a dedicated venv for the
-pystxmcontrol/ophyd-async integration (separate from gpcam-based adaptive work) avoids the
-clash entirely — flag for Ron's decision.
+**Guidance:** keep ophyd-async-based device integration out of any venv that also hosts the
+tsuchinoko/gpCAM stack if you want pip resolves to stay clean — they don't need to share a venv.
+If they must coexist, pin `numpy>=2.3.5,<2.4`. Rollback snapshot of the pre-Task-6 freeze:
+`_lightfall_venv_freeze_pre_task6.txt` (untracked).
 
 ### Combined import verification (the crux)
 
