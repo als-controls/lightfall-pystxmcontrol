@@ -2,7 +2,7 @@
 
 import asyncio
 
-from bluesky.protocols import Movable, Stoppable
+from bluesky.protocols import Movable, Stoppable, Triggerable
 from ophyd_async.core import (
     AsyncStatus,
     StandardReadable,
@@ -26,7 +26,8 @@ class PystxmAxis(StandardReadable, Movable, Stoppable):
     def set_name(self, name: str, *, child_name_separator: str | None = None):
         super().set_name(name, child_name_separator=child_name_separator)
         # Rename readback so read()/describe() key on the device name directly.
-        self.readback.set_name(name)
+        if name:
+            self.readback.set_name(name)
 
     async def connect(self, mock=False, timeout: float = 10.0,
                       force_reconnect: bool = False) -> None:
@@ -44,3 +45,36 @@ class PystxmAxis(StandardReadable, Movable, Stoppable):
     async def stop(self, success: bool = True) -> None:
         # Sim motors complete moveTo synchronously; best-effort no-op.
         return None
+
+
+class PystxmCounter(StandardReadable, Triggerable):
+    """ophyd-async detector wrapping a pystxmcontrol `daq` (sim mode)."""
+
+    def __init__(self, daq_config: dict, dwell: float = 1.0, name: str = ""):
+        self._daq_config = daq_config
+        self._dwell = dwell
+        self._daq = None  # built in connect()
+        with self.add_children_as_readables(Format.HINTED_SIGNAL):
+            self.value = soft_signal_rw(float, initial_value=0.0)
+        super().__init__(name=name)
+
+    def set_name(self, name: str, *, child_name_separator: str | None = None):
+        super().set_name(name, child_name_separator=child_name_separator)
+        # Rename value so read()/describe() key on the bare device name directly.
+        if name:
+            self.value.set_name(name)
+
+    async def connect(self, mock=False, timeout: float = 10.0,
+                      force_reconnect: bool = False) -> None:
+        if self._daq is None:
+            self._daq = config.make_sim_counter(self._daq_config)
+            self._daq.config(dwell=self._dwell)
+        await super().connect(mock=mock, timeout=timeout,
+                              force_reconnect=force_reconnect)
+
+    @AsyncStatus.wrap
+    async def trigger(self):
+        data = await self._daq.getPoint()
+        # getPoint returns ndarray of shape (1,); unwrap to scalar.
+        scalar = float(data[0]) if hasattr(data, "__len__") else float(data)
+        await self.value.set(scalar)
