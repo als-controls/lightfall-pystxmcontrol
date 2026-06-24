@@ -10,9 +10,18 @@ requires-python = ">=3.10"
 dependencies = ["ophyd-async", "bluesky", "numpy"]
 
 [project.optional-dependencies]
-# pystxmcontrol installed separately (see NOTES-environment.md); kept optional
-# so the wrappers can be unit-tested against a stub if needed.
-hardware = ["pystxmcontrol"]
+# pystxmcontrol's driver/controller modules, pinned to the als-controls fork
+# (branch headless-install-fixes) which carries three fixes needed for a clean,
+# cross-platform, headless install — a lazy-import guard, a non-fatal Linux
+# desktop-file hook, and a relaxed requires-python. These are PR'd to David
+# Shapiro's upstream; once merged, repoint this at upstream.
+#
+# NOTE: install this extra with `--no-deps` to skip pystxmcontrol's heavy GUI
+# dependencies (PySide6, opencv, etc.) — the simulated driver path only needs
+# numpy/pyzmq/python-usbtmc/pyusb/pyserial. See README.md / NOTES-environment.md.
+hardware = [
+    "pystxmcontrol @ git+https://github.com/als-controls/pystxmcontrol.git@fa801472a0e5f1dfe230edd48e9045dd3416a65d",
+]
 test = ["pytest", "pytest-asyncio"]
 
 [tool.hatch.version]

@@ -29,26 +29,29 @@ real (`soft_signal_rw`); `motor.moveTo` (blocking) is called via
 
 ## Install
 
-pystxmcontrol's wheel build fails on Windows and its README caps Python at
-≤3.12 (a GUI-dependency cap), so it is installed `--no-deps` from a local clone
-with two small patches. **Full details and exact pinned versions are in
-[`NOTES-environment.md`](NOTES-environment.md).** Summary, against the target
-interpreter's venv:
+pystxmcontrol is consumed from a **pinned als-controls fork** that carries three
+small fixes for a clean headless, cross-platform install (lazy-import guard,
+non-fatal Linux desktop hook, relaxed `requires-python` — all PR'd upstream to
+David Shapiro). Install it `--no-deps` to skip its heavy GUI dependencies
+(PySide6, opencv, ...); the simulated driver path only needs
+numpy/pyzmq/usbtmc/serial. Full details and pinned versions are in
+[`NOTES-environment.md`](NOTES-environment.md). Against the target interpreter's venv:
 
 ```bash
-# 1. ophyd-async (has a native cp314 wheel; pulls scanspec, pydantic-numpy, ...)
+# 1. ophyd-async (native cp314 wheel; pulls scanspec, pydantic-numpy, ...)
 python -m pip install ophyd-async bluesky numpy
 
-# 2. pystxmcontrol from a local clone, patched, no deps
-git clone https://github.com/davidalexandershapiro/pystxmcontrol.git _pystxmcontrol_src
-#   patch _pystxmcontrol_src/pystxmcontrol/drivers/__init__.py  -> lazy-import guard
-#   patch _pystxmcontrol_src/pyproject.toml requires-python     -> ">=3.9"
-python -m pip install -e ./_pystxmcontrol_src --no-deps
-python -m pip install pyzmq pyepics pylibftdi pyserial python-usbtmc pyusb
+# 2. pystxmcontrol driver modules from the pinned fork, no GUI deps
+python -m pip install --no-deps \
+  "pystxmcontrol @ git+https://github.com/als-controls/pystxmcontrol.git@fa801472a0e5f1dfe230edd48e9045dd3416a65d"
+python -m pip install pyzmq python-usbtmc pyusb pyserial   # minimal driver deps
 
 # 3. this package
 python -m pip install -e . --no-deps
 ```
+
+(The `hardware` extra in `pyproject.toml` records the same pinned fork URL, so
+`pip install -e ".[hardware]" --no-deps` installs both in one step.)
 
 - **Phase 0** (driver/wrapper proof, no Lightfall) runs on a dedicated **Python
   3.12** venv.
@@ -80,16 +83,24 @@ Lightfall's 3.14 venv (they import `lightfall`).
 runs its RunEngine on a worker thread) and prints e.g.
 `grid_scan ran via Lightfall BlueskyEngine: 25 points; min=... max=...`.
 
-## Upstream patches to offer David
+## Upstream fork & PR
 
-Both live in the gitignored `_pystxmcontrol_src/` clone (re-apply on a fresh
-clone), and are good candidates for upstream PRs:
+The three install fixes live on the **als-controls fork**
+(`als-controls/pystxmcontrol`, branch `headless-install-fixes`) and are offered
+to David Shapiro as an upstream PR:
 
-1. `drivers/__init__.py` — wrap each eager driver import in `try/except` (a
-   lazy-import guard), so missing hardware SDKs (SmarAct, Aerotech, scipy,
-   matplotlib, pipython, h5py) don't break importing the whole package.
-2. `pyproject.toml` — relax `requires-python` so the driver modules install on
-   Python 3.14 (the ≤3.12 cap is driven by GUI wheels, skipped by `--no-deps`).
+1. `drivers/__init__.py` — lazy-import guard (each driver in `try/except`,
+   mirroring the existing SmarAct/Aerotech pattern) so a missing hardware SDK
+   (epics, pylibftdi, scipy, matplotlib, h5py, ...) doesn't break importing the
+   package.
+2. `setup.py` — make the Linux desktop-file install non-fatal / cross-platform
+   (it ran `update-desktop-database` unconditionally → `WinError 2` aborted the
+   wheel build on Windows).
+3. `pyproject.toml` — relax `requires-python` to allow 3.13+.
+
+Once David merges upstream, repoint the `hardware` dependency in
+`pyproject.toml` (and the install command above) at his upstream tag/commit and
+retire the fork.
 
 ## Out of scope (Phase 2+)
 

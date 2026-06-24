@@ -206,10 +206,28 @@ plugin importable
 | `pystxmcontrol` | 1.0 (editable) | our wrappers |
 | `lightfall-pystxmcontrol` | 0.1.dev5 (editable) | this package |
 
-### Patches applied to _pystxmcontrol_src
+### Patches → now in the als-controls fork (SUPERSEDES the local clone)
 
-1. `pystxmcontrol/drivers/__init__.py`: lazy-import guard (Task 1, preserved).
-2. `pyproject.toml`: `requires-python` relaxed from `">=3.9,<3.13"` to `">=3.9"`
-   so editable install succeeds on Python 3.14. The 3.12 cap in the upstream README
-   is driven by GUI wheels (PySide6 etc.); `--no-deps` skips all GUI deps so 3.14
-   works cleanly for the driver modules.
+**Post-Phase-1 update:** the local `_pystxmcontrol_src/` clone + manual patching is
+**superseded**. The three install fixes now live on the fork
+**`als-controls/pystxmcontrol`, branch `headless-install-fixes`**
+(commit `fa801472a0e5f1dfe230edd48e9045dd3416a65d`), and are PR'd to David Shapiro.
+The reproducible install is now a one-liner (no clone, no manual patching):
+
+```bash
+pip install --no-deps \
+  "pystxmcontrol @ git+https://github.com/als-controls/pystxmcontrol.git@fa801472a0e5f1dfe230edd48e9045dd3416a65d"
+```
+
+The three fixes on that branch:
+
+1. `pystxmcontrol/drivers/__init__.py`: lazy-import guard — each driver in `try/except`
+   (mirrors the existing SmarAct/Aerotech pattern) so a missing optional SDK doesn't
+   break importing the package.
+2. `setup.py`: the Linux desktop-file install (`update-desktop-database`) made
+   non-fatal / cross-platform — it ran unconditionally and raised `WinError 2` during
+   the wheel build on Windows, aborting `pip install`.
+3. `pyproject.toml`: `requires-python` relaxed from `">=3.9,<3.13"` to `">=3.9"`
+   (the 3.12 cap is driven by GUI wheels; `--no-deps` skips them).
+
+Once merged upstream, repoint at David's tag/commit and retire the fork.
