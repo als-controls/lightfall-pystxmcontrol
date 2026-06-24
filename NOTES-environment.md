@@ -231,3 +231,59 @@ The three fixes on that branch:
    (the 3.12 cap is driven by GUI wheels; `--no-deps` skips them).
 
 Once merged upstream, repoint at David's tag/commit and retire the fork.
+
+---
+
+## Phase 2a — fly-scan spike
+
+**Script:** `scripts/smoke_getline.py`
+**Interpreter:** `C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python` (Python 3.14 / bluesky 1.14.6 / ophyd-async 0.19.2)
+
+### (a) getLine line acquisition — pinned
+
+Exact working call sequence:
+
+```python
+d = config.make_sim_counter(config.DEFAULT_COUNTER)   # build + meta.update + start
+d.config(dwell=1.0, count=nx, samples=1)              # line config: concrete signature
+data = asyncio.run(d.getLine())                        # returns numpy.ndarray, len == nx
+```
+
+- `config(dwell=…, count=nx, samples=1)` is the correct signature (NOT `points=` or `mode=`).
+- `DEFAULT_COUNTER` has `"type": "point"` — that is fine; `getLine()` works regardless.
+- `getLine()` returns `numpy.ndarray` of dtype `int32`, shape `(nx,)`.
+- `len(data) == nx` confirmed for `nx = 5`.
+- Sample output: `array([10139, 10097, 9886, 9863, 10008], dtype=int32)`
+
+### (b) inline Flyable collect path — pinned
+
+**Key finding:** bluesky 1.14.6's `bps.collect` emits `event_page` documents, NOT `event`.
+The brief's expected doc names `['start', 'descriptor', 'event', 'stop']` are WRONG for this version.
+Actual document stream observed (in order): `['start', 'descriptor', 'event_page', 'stop']`.
+
+**Tasks 2 and 3 must use `event_page` throughout — not `event`.**
+
+`event_page["data"][key]` is a list of per-event arrays; `[0]` indexes the first event's array.
+For a one-event-per-line flyer, `event_page["data"]["Counter1"][0]` has shape `(nx,)`.
+
+The `describe_collect` descriptor form with `"dtype": "array"` and `"shape": [nx]` is accepted
+as-written — no `dtype_numpy` field required, no alternative spelling needed.
+
+Working `kickoff` / `complete` / `collect` call forms (as-written in brief, confirmed working):
+```python
+yield from bps.kickoff(fl, wait=True)
+yield from bps.complete(fl, wait=True)
+yield from bps.collect(fl)        # emits event_page (not event)
+```
+
+### Exact spike stdout (representative run)
+
+```
+getLine type: <class 'numpy.ndarray'> len: 5 sample: array([10063, 10080,  9880, 10001,  9962], dtype=int32)
+--- getLine pinned: ndarray len 5 ---
+flyable doc names: ['start', 'descriptor', 'event_page', 'stop']
+event_page Counter1 len: 5 SampleX len: 5
+--- inline Flyable collect path OK ---
+```
+
+(Preceded by the expected 10-line pystxmcontrol lazy-import-guard noise.)
