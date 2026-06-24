@@ -1,5 +1,4 @@
 # src/lightfall_pystxmcontrol/flyer.py
-import asyncio
 import time as _time
 from collections.abc import Iterator
 

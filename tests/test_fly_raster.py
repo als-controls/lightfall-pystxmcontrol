@@ -2,7 +2,6 @@
 import asyncio
 
 import numpy as np
-import pytest
 from bluesky import RunEngine
 
 from lightfall_pystxmcontrol import config

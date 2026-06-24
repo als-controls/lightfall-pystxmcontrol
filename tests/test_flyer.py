@@ -35,4 +35,6 @@ async def test_describe_collect_reports_arrays(flyer):
     desc = flyer.describe_collect()["primary"]
     assert desc["Counter1"]["dtype"] == "array"
     assert desc["Counter1"]["shape"] == [4]
+    assert desc["SampleX"]["dtype"] == "array"
+    assert desc["SampleX"]["shape"] == [4]
     assert desc["SampleY"]["dtype"] == "number"
