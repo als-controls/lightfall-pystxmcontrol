@@ -43,10 +43,12 @@ while time.time() < deadline:
         break
     app.processEvents(); time.sleep(0.05)
 
+assert "stop" in [n for n, _ in docs] and engine.is_idle, "timed out waiting for fly raster to complete"
 names = [n for n, _ in docs]
 rows = [d["data"]["Counter1"][0] for n, d in docs if n == "event_page"]   # event_page: unwrap [0]
 assert names[:1] == ["start"] and names[-1:] == ["stop"], names[:3]
 assert len(rows) == ny, f"expected {ny} lines, got {len(rows)}"
 allcounts = np.concatenate([np.asarray(r) for r in rows])
+assert allcounts.shape == (ny * nx,), f"expected {ny*nx} pixels, got {allcounts.shape}"
 print(f"fly raster ran via Lightfall BlueskyEngine: {ny} lines x {nx} pts; "
       f"min={allcounts.min():.0f} max={allcounts.max():.0f}")
