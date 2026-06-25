@@ -11,10 +11,10 @@ def backend():
     return be
 
 
-def test_backend_registers_three_devices(backend):
+def test_backend_registers_four_devices(backend):
     devs = backend.list_devices()
     names = {d.name for d in devs}
-    assert names == {"SampleX", "SampleY", "Counter1"}
+    assert names == {"SampleX", "SampleY", "Counter1", "STXMLineFlyer"}
 
 
 def test_devices_have_connected_ophyd_instances(backend):

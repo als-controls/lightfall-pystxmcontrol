@@ -27,6 +27,7 @@ from lightfall.devices.model import (
 
 from . import config
 from .devices import PystxmAxis, PystxmCounter
+from .flyer import PystxmLineFlyer
 
 
 class PystxmStxmBackend(DeviceBackend):
@@ -94,6 +95,10 @@ class PystxmStxmBackend(DeviceBackend):
             counter = PystxmCounter(config.DEFAULT_COUNTER, dwell=1.0, name="Counter1")
             specs.append(("Counter1", counter, DeviceCategory.DETECTOR))
 
+            flyer = PystxmLineFlyer(config.DEFAULT_COUNTER, config.DEFAULT_AXES["SampleX"],
+                                    name="STXMLineFlyer")
+            specs.append(("STXMLineFlyer", flyer, DeviceCategory.DETECTOR))
+
             async def _connect_all():
                 for _, dev, _ in specs:
                     await dev.connect(mock=False)
@@ -106,7 +111,7 @@ class PystxmStxmBackend(DeviceBackend):
                 info = DeviceInfo(
                     name=dev_name,
                     description=f"Simulated pystxmcontrol {category.value}",
-                    device_class=f"lightfall_pystxmcontrol.devices:{type(dev).__name__}",
+                    device_class=f"{type(dev).__module__}:{type(dev).__name__}",
                     category=category,
                     connection_type=ConnectionType.SIMULATED,
                     prefix=dev_name,
