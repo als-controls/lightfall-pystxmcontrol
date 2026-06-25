@@ -24,7 +24,6 @@ def _stxm_fly_raster_ui(
     x_stop: Annotated[float, Unit("um")] = 5.0,
     nx: Annotated[int, Range(1, 10000)] = 10,
     dwell: Annotated[float, Unit("ms")] = 1.0,
-    md: dict | None = None,
 ) -> Generator[Any, Any, Any]:
     """Step the slow axis (Y) and fly the fast axis (X) per row, one event per line.
 
@@ -33,7 +32,7 @@ def _stxm_fly_raster_ui(
     """
     return (yield from stxm_fly_raster(
         flyer, y_axis, y_start=y_start, y_stop=y_stop, ny=ny,
-        x_start=x_start, x_stop=x_stop, nx=nx, dwell=dwell, md=md))
+        x_start=x_start, x_stop=x_stop, nx=nx, dwell=dwell, md=None))
 
 
 class StxmFlyRasterPlanPlugin(PlanPlugin):

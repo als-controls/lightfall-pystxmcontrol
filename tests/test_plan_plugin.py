@@ -12,10 +12,8 @@ def test_plan_info_exposes_expected_parameters():
     plugin = StxmFlyRasterPlanPlugin()
     info = plugin.get_plan_info()
     param_names = {p.name for p in info.parameters}
-    # The nine UI-relevant parameters must all be present.  md is optional
-    # metadata forwarding and may also appear; use subset to stay robust.
     assert {"flyer", "y_axis", "y_start", "y_stop", "ny",
-            "x_start", "x_stop", "nx", "dwell"} <= param_names
+            "x_start", "x_stop", "nx", "dwell"} == param_names
 
 
 def test_adapter_delegates_to_pure_plan():
