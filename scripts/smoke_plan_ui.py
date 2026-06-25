@@ -22,7 +22,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import asyncio
 import inspect
 from collections.abc import Generator
-from typing import Annotated, Any, get_args, get_origin
+from typing import Annotated, Any, get_origin
 
 from lightfall_pystxmcontrol import config
 from lightfall_pystxmcontrol.backend import PystxmStxmBackend
@@ -32,7 +32,7 @@ from lightfall_pystxmcontrol.plans import stxm_fly_raster
 
 # --- (a)/(c) PlanInfo introspection of an Annotated signature ---
 from lightfall.acquire.plans.registry import ParameterInfo, PlanInfo
-from lightfall.ui.annotations import DeviceFilter, Range, Unit
+from lightfall.ui.annotations import DeviceFilter, DeviceFilterAny, Range, Unit
 
 # device_class as the backend registers it (module:Class, see backend.py).
 FLYER_DEVICE_CLASS = "lightfall_pystxmcontrol.flyer:PystxmLineFlyer"
@@ -108,48 +108,89 @@ for p in info.parameters:
 
 
 # --- (c) Annotated-signature introspection: how params classify in the UI ---
-# PlanInfo/ParameterInfo store the RAW annotation (the Annotated[...] object).
-# The device-picker-vs-numeric classification lives in plan_config.py's
-# _build_param_spec via extract_annotated_metadata + get_param_category.
-# Replicate that logic here so the spike proves the classification WITHOUT a
-# QApplication (the real classifier needs pyqtgraph/Qt). The matching rule for
-# device_class is copied verbatim from plan_config.py (lines ~504-513).
-print("\n--- (c) Annotated classification (mirrors plan_config._build_param_spec) ---")
+# PlanInfo/ParameterInfo store the RAW annotation. Because this module uses
+# `from __future__ import annotations` (line ~26 — the harder, realistic case),
+# `param.annotation` is a STRING like "Annotated[Any, DeviceFilter(device_class=...)]",
+# NOT a live object. The device-picker-vs-numeric classification therefore MUST go
+# through Lightfall's REAL classifier, which resolves the string against the plan
+# function's module globals before introspecting it.
+#
+# AUTHORITATIVE classification = the real Lightfall functions:
+#   - extract_annotated_metadata(annotation, func): resolves the string annotation
+#     (via resolve_string_annotation, using func.__module__ globals) -> (base, [meta]).
+#   - get_param_category(name, base): name/type heuristic -> ParamCategory.
+#   - the DeviceFilter/DeviceFilterAny override (verbatim from _build_param_spec):
+#     any DeviceFilter in metadata forces DEVICE (single) / DEVICES (list base),
+#     even when the base type is Any.
+# These import cleanly and run WITHOUT a QApplication (they touch no Qt objects),
+# so no offscreen QApplication is constructed for surface (c).
+print("\n--- (c) Annotated classification (REAL lightfall.ui.widgets.plan_config) ---")
+
+from lightfall.ui.widgets.plan_config import (
+    ParamCategory,
+    extract_annotated_metadata,
+    get_param_category,
+)
+
+# `_probe_plan`'s annotations are strings under future-annotations — confirm that,
+# so the spike record shows we exercised the realistic (string) path.
+print("  param.annotation is a STRING (future-annotations)?",
+      isinstance(info.parameters[0].annotation, str))
 
 
-def _extract_annotated_metadata(annotation: Any) -> tuple[Any, list[Any]]:
-    """Mirror lightfall.ui.widgets.plan_config.extract_annotated_metadata.
+def _real_classify(param: ParameterInfo) -> tuple[str, Any, list[Any]]:
+    """Classify a parameter through Lightfall's REAL functions.
 
-    Annotations here are real objects (we did NOT use string annotations in the
-    probe func's own scope), so no string-resolution step is needed.
+    Mirrors the device-vs-basic decision in plan_config._build_param_spec exactly:
+    real extract_annotated_metadata (resolves the string annotation against the
+    plan func's module globals) + real get_param_category + the real DeviceFilter
+    override. Returns (label, resolved_base, resolved_metadata).
     """
-    if get_origin(annotation) is Annotated:
-        args = get_args(annotation)
-        if args:
-            return args[0], list(args[1:])
-    return annotation, []
-
-
-def _classify(param: ParameterInfo) -> str:
-    base, metadata = _extract_annotated_metadata(param.annotation)
-    has_device_filter = any(isinstance(m, DeviceFilter) for m in metadata)
-    if has_device_filter:
+    # Real metadata extraction (handles string annotations via the func's globals).
+    base, metadata = extract_annotated_metadata(param.annotation, info.func)
+    # Real name/type heuristic.
+    category = get_param_category(param.name, base)
+    # Real DeviceFilter override (copied decision from _build_param_spec).
+    has_device_filter = any(isinstance(m, (DeviceFilter, DeviceFilterAny)) for m in metadata)
+    if has_device_filter and category not in (ParamCategory.DEVICE, ParamCategory.DEVICES):
         origin = get_origin(base)
-        return "devices (multi)" if origin in (list, tuple) else "device (single)"
-    # numeric/basic
-    units = [m.suffix for m in metadata if isinstance(m, Unit)]
-    ranges = [(m.min, m.max) for m in metadata if isinstance(m, Range)]
-    extra = ""
-    if units:
-        extra += f" unit={units[0]}"
-    if ranges:
-        extra += f" range={ranges[0]}"
-    tn = getattr(base, "__name__", str(base))
-    return f"basic:{tn}{extra}"
+        category = ParamCategory.DEVICES if origin in (list, tuple) else ParamCategory.DEVICE
+
+    if category in (ParamCategory.DEVICE, ParamCategory.DEVICES):
+        label = "device" if category == ParamCategory.DEVICE else "devices"
+    else:
+        units = [m.suffix for m in metadata if isinstance(m, Unit)]
+        ranges = [(m.min, m.max) for m in metadata if isinstance(m, Range)]
+        extra = ""
+        if units:
+            extra += f" unit={units[0]}"
+        if ranges:
+            extra += f" range={ranges[0]}"
+        tn = getattr(base, "__name__", str(base))
+        label = f"basic:{tn}{extra}"
+    return label, base, metadata
 
 
+classification: dict[str, str] = {}
 for p in info.parameters:
-    print(f"  {p.name:12} -> {_classify(p)}")
+    label, base, metadata = _real_classify(p)
+    classification[p.name] = label
+    print(
+        f"  {p.name:12} -> {label:18} "
+        f"(real base={getattr(base, '__name__', base)!s}, "
+        f"meta={[type(m).__name__ for m in metadata]})"
+    )
+
+# Assert the load-bearing finding for Task 3, proven against the REAL classifier:
+# flyer/y_axis are device-pickers; the numerics are basic. If these hold under
+# future-annotations, fold-forward rule #2 (names importable at module scope ->
+# string resolution works) is empirically confirmed.
+assert classification["flyer"] == "device", classification
+assert classification["y_axis"] == "device", classification
+assert classification["ny"].startswith("basic:int"), classification
+assert classification["dwell"].startswith("basic:float"), classification
+print("  => REAL classifier: flyer/y_axis=device, ny/dwell=basic — "
+      "string-annotation classification WORKS under future-annotations.")
 
 
 # --- (b) register a non-Readable flyer as a DeviceInfo; exercise the catalog path ---
@@ -238,7 +279,13 @@ print(
 
 
 # --- (c) device_class filter selects the flyer out of a list incl. the point Counter1 ---
-print("\n--- (c) DeviceFilter(device_class=...) matching ---")
+# NOTE: this matcher is a SOURCE-DERIVED PORT (accurate-by-construction), not a call
+# into the live function. The real predicate is a lambda closure built inside
+# plan_config._build_param_spec (the `meta.device_class is not None` branch); it
+# closes over a pyqtgraph param spec and is only constructed when a PlanConfigWidget
+# (a QWidget, => needs a QApplication) builds the device-param row, so it is not
+# cleanly callable headless. The body below is copied verbatim from that branch.
+print("\n--- (c) DeviceFilter(device_class=...) matching [source-derived port] ---")
 
 
 def _device_class_match(device_info: DeviceInfo, dc: str) -> bool:

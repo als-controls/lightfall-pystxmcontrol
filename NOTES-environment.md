@@ -357,14 +357,32 @@ The classifier lives in `plan_config._build_param_spec`:
 2. `category = get_param_category(name, base_type)` (name heuristics: `detectors`/`dets` -> DEVICES; `motor`/`signal`/`positioner`/`obj` -> DEVICE; else by type string).
 3. **Override:** if any metadata item is a `DeviceFilter`/`DeviceFilterAny`, the param is forced to DEVICE (single) or DEVICES (if base is `list`/`tuple`). This is how `Annotated[Any, DeviceFilter(...)]` becomes a device-picker even though base `Any` is not device-like.
 
-**VERIFIED through the real Lightfall path** (separate probe; `from __future__ import annotations` active so annotations are strings):
+**VERIFIED IN-SCRIPT against the REAL Lightfall functions** — `smoke_plan_ui.py` imports
+`extract_annotated_metadata`, `get_param_category`, `ParamCategory` from
+`lightfall.ui.widgets.plan_config` and runs them on `_probe_plan` (the script has
+`from __future__ import annotations`, so `param.annotation` is a STRING — the harder,
+realistic case). No QApplication is constructed; both functions import and run cleanly
+headless (they touch no Qt objects). Actual spike output:
 ```
-flyer    base=Any   meta=[DeviceFilter] filter=lightfall_pystxmcontrol.flyer:PystxmLineFlyer -> device
-y_axis   base=Any   meta=[DeviceFilter] filter=cat=motor                                     -> device
-ny       base=int   meta=[Range]                                                             -> basic
-dwell    base=float meta=[Unit]                                                              -> basic
+param.annotation is a STRING (future-annotations)? True
+flyer        -> device             (real base=Any, meta=['DeviceFilter'])
+y_axis       -> device             (real base=Any, meta=['DeviceFilter'])
+y_start      -> basic:float unit=um (real base=float, meta=['Unit'])
+ny           -> basic:int range=(1, 10000) (real base=int, meta=['Range'])
+dwell        -> basic:float unit=ms (real base=float, meta=['Unit'])
+=> REAL classifier: flyer/y_axis=device, ny/dwell=basic — string-annotation classification WORKS under future-annotations.
 ```
-**IMPORTANT for Tasks 2-4:** classification only works because `extract_annotated_metadata` is passed `func` so `resolve_string_annotation` can eval the string against `func.__module__`'s globals. The plugin module that defines the plan **must keep `Annotated`, `DeviceFilter`, `Unit`, `Range`, and the `FLYER_DEVICE_CLASS` constant importable at module scope** — otherwise the eval fails and the param silently falls back to a plain string field. (The spike's own inline `_classify` mirror skipped string-resolution and therefore mis-reported the device params as "basic"; that is a mirror limitation, NOT a real-path problem — the real path above is correct.)
+The script `assert`s `flyer`/`y_axis` == `device` and `ny`/`dwell` startswith `basic:int`/`basic:float`,
+so a regression would fail the spike.
+
+**IMPORTANT for Tasks 2-4 (fold-forward #2, now EMPIRICALLY CONFIRMED):** classification works
+under `from __future__ import annotations` **only because** `extract_annotated_metadata` is passed
+`func` so `resolve_string_annotation` can eval the string against `func.__module__`'s globals.
+The plugin module that defines the plan **must keep `Annotated`, `DeviceFilter`, `Unit`, `Range`,
+and the `FLYER_DEVICE_CLASS` constant importable at module scope** — otherwise the eval fails and
+the param silently falls back to a plain string field. Task 3 may use `from __future__ import
+annotations` in the plan module (the realistic case is proven to work), provided those names stay
+module-importable.
 
 ### device_class filter matching semantics — PINNED (a real gotcha)
 
@@ -473,6 +491,14 @@ type(parameters[0]): ParameterInfo
 ParameterInfo fields: ['name', 'annotation', 'default', 'kind', 'description'] + props: required, type_name
   name='flyer'  type_name='Annotated[Any, DeviceFilter(device_class=FLYER_DEVICE_CLASS)]' required=True  ...
   name='ny'     type_name='Annotated[int, Range(1, 10000)]' required=False default=6 ...
+
+--- (c) Annotated classification (REAL lightfall.ui.widgets.plan_config) ---
+  param.annotation is a STRING (future-annotations)? True
+  flyer        -> device             (real base=Any, meta=['DeviceFilter'])
+  y_axis       -> device             (real base=Any, meta=['DeviceFilter'])
+  ny           -> basic:int range=(1, 10000) (real base=int, meta=['Range'])
+  dwell        -> basic:float unit=ms (real base=float, meta=['Unit'])
+  => REAL classifier: flyer/y_axis=device, ny/dwell=basic — string-annotation classification WORKS under future-annotations.
 
 --- (b) non-Readable flyer in the device catalog ---
 backend.connect(): True device_count: 3
