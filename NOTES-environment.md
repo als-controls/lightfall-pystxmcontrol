@@ -287,3 +287,216 @@ event_page Counter1 len: 5 SampleX len: 5
 ```
 
 (Preceded by the expected 10-line pystxmcontrol lazy-import-guard noise.)
+
+---
+
+## Phase 2b — UI-launch spike
+
+**Script:** `scripts/smoke_plan_ui.py`
+**Interpreter:** `C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python` (Python 3.14 / bluesky 1.14.6 / ophyd-async 0.19.2 / lightfall editable)
+**Type:** empirical spike (NOT TDD). Probes Lightfall's *internal* plan-surfacing + device-catalog APIs so Tasks 2-4 build against confirmed forms.
+
+### Lightfall source pinned (read-only, in `lightfall/src/lightfall/`)
+
+- `plugins/plan_plugin.py` — `PlanPlugin(PluginType)`, `type_name="plan"`, `is_singleton=True`. ABC: abstract `name` (property) + abstract `get_plan_function()`; `category` property defaults `"general"`. `get_plan_info()` calls `PlanInfo.from_function(name=self.name, func=self.get_plan_function(), category=self.category)`. (Matches the prior-exploration note exactly.)
+- `acquire/plans/registry.py` — `PlanInfo` + `ParameterInfo` dataclasses (see field names below); `PlanRegistry.register(name, func, category="general")` / `get_plan(name)->PlanInfo|None` / `list_plans(category=None)` / `register_or_replace(...)`.
+- `ui/annotations.py` — frozen dataclasses, import-light (no Qt). Constructor arg names confirmed below.
+- `ui/widgets/plan_config.py` — the device-vs-numeric classifier (`_build_param_spec` + `extract_annotated_metadata` + `get_param_category`); the verbatim `device_class` matching lambda.
+- `ui/panels/bluesky_panel.py` — `_resolve_device_kwargs(self, plan_info, kwargs)` + `_resolve_single_device(catalog, name)` + `self._engine(plan)`.
+- `devices/model.py`, `devices/catalog.py`, `devices/base.py` — `DeviceInfo` fields, `DeviceCatalog`, `DeviceBackend`.
+
+### (a) PlanInfo / ParameterInfo field names — PINNED (assert these in Task 3)
+
+`PlanInfo` (dataclass) public fields:
+```
+name, func, signature, description, category, parameters, examples, display_name, icon
+```
+Plus methods `get_display_name()`, `get_icon()`. `PlanInfo.from_function(name, func, category="general")` — keyword call works (`PlanInfo.from_function(name=..., func=..., category=...)`).
+
+`ParameterInfo` (one per signature param, `info.parameters[i]`) fields + props:
+```
+name        : str          (parameter name)
+annotation  : Any          (the RAW annotation — the Annotated[...] object/STRING, see (c))
+default     : Any          (inspect.Parameter.empty when required)
+kind        : inspect._ParameterKind
+description : str          (parsed from the docstring Args: section)
+required    : bool   (@property — default is inspect.Parameter.empty)
+type_name   : str    (@property — annotation.__name__ or str(annotation); NOT a clean "int"/"float" when Annotated)
+```
+**Gotcha for Task 3:** `ParameterInfo.type_name` is NOT a clean base-type name for `Annotated[...]` params — it returns the full `str(annotation)` (e.g. `"Annotated[float, Unit('um')]"`, or the literal string when `from __future__ import annotations` is active). Do NOT assert `type_name == "float"`. To get the base type + UI metadata, use `lightfall.ui.widgets.plan_config.extract_annotated_metadata(param.annotation, func)` (returns `(base_type, [meta...])`).
+
+### lightfall.ui.annotations constructor arg names — PINNED
+
+```python
+Unit(suffix: str)                                   # -> pyqtgraph spec["suffix"]
+Decimals(places: int)                               # -> spec["decimals"]
+Range(min=None, max=None)                           # -> spec["limits"] = (min, max)
+Default(value)                                      # overrides signature default
+DeviceFilter(device_class=None, category=None, group=None, source=None, name_pattern=None)
+DeviceFilterAny(*filters)                           # OR of DeviceFilters (varargs)
+DeviceDefault(*names, pattern=None)                 # pre-select
+DeviceIcon(name)                                    # qtawesome icon
+```
+`DeviceFilter.category` accepts `str | set[str]`. All are `@dataclass(frozen=True)`. No `Qt` import — safe to import in plugin code.
+
+### Working Annotated forms (use verbatim in Task 2/3 plan signature)
+
+```python
+flyer:   Annotated[Any, DeviceFilter(device_class=FLYER_DEVICE_CLASS)]
+y_axis:  Annotated[Any, DeviceFilter(category="motor")]
+y_start: Annotated[float, Unit("um")] = -5.0
+ny:      Annotated[int, Range(1, 10000)] = 6
+dwell:   Annotated[float, Unit("ms")] = 1.0
+```
+where `FLYER_DEVICE_CLASS = "lightfall_pystxmcontrol.flyer:PystxmLineFlyer"`.
+
+### (c) Annotated classification + how a param becomes a device-picker — PINNED
+
+The classifier lives in `plan_config._build_param_spec`:
+1. `base_type, metadata = extract_annotated_metadata(annotation, func)` — strips `Annotated[T, m1, m2]` to `(T, [m1, m2])`. **Resolves STRING annotations** (from `from __future__ import annotations`) by `eval` against a namespace that includes `typing`, `Annotated`, the `lightfall.ui.annotations` classes, AND `func`'s module globals.
+2. `category = get_param_category(name, base_type)` (name heuristics: `detectors`/`dets` -> DEVICES; `motor`/`signal`/`positioner`/`obj` -> DEVICE; else by type string).
+3. **Override:** if any metadata item is a `DeviceFilter`/`DeviceFilterAny`, the param is forced to DEVICE (single) or DEVICES (if base is `list`/`tuple`). This is how `Annotated[Any, DeviceFilter(...)]` becomes a device-picker even though base `Any` is not device-like.
+
+**VERIFIED through the real Lightfall path** (separate probe; `from __future__ import annotations` active so annotations are strings):
+```
+flyer    base=Any   meta=[DeviceFilter] filter=lightfall_pystxmcontrol.flyer:PystxmLineFlyer -> device
+y_axis   base=Any   meta=[DeviceFilter] filter=cat=motor                                     -> device
+ny       base=int   meta=[Range]                                                             -> basic
+dwell    base=float meta=[Unit]                                                              -> basic
+```
+**IMPORTANT for Tasks 2-4:** classification only works because `extract_annotated_metadata` is passed `func` so `resolve_string_annotation` can eval the string against `func.__module__`'s globals. The plugin module that defines the plan **must keep `Annotated`, `DeviceFilter`, `Unit`, `Range`, and the `FLYER_DEVICE_CLASS` constant importable at module scope** — otherwise the eval fails and the param silently falls back to a plain string field. (The spike's own inline `_classify` mirror skipped string-resolution and therefore mis-reported the device params as "basic"; that is a mirror limitation, NOT a real-path problem — the real path above is correct.)
+
+### device_class filter matching semantics — PINNED (a real gotcha)
+
+Verbatim from `plan_config._build_param_spec` (the `filter_func` built for `DeviceFilter(device_class=dc)`):
+```python
+m["device_info"] is not None and (
+    m["device_info"].device_class == dc
+    or m["device_info"].device_class.rsplit(".", 1)[-1] == dc
+)
+```
+- **`rsplit` is on `"."`, NOT `":"`.** Our `device_class` is `"lightfall_pystxmcontrol.flyer:PystxmLineFlyer"` (module:Class). Its last `"."`-segment is `"flyer:PystxmLineFlyer"`, so the bare-class fallback (`dc="PystxmLineFlyer"`) does **NOT** match.
+- **Only full-string equality matches** for a `module:Class` device_class. Verified:
+```
+DeviceFilter(device_class='lightfall_pystxmcontrol.flyer:PystxmLineFlyer') selects: ['STXMLineFlyer']   (only the flyer)
+DeviceFilter(device_class='PystxmLineFlyer')                              selects: []                  (bare-class fails)
+DeviceFilter(category='motor')                                           selects: ['SampleX','SampleY']
+```
+**Task 2/3 rule:** the plugin's `Annotated[..., DeviceFilter(device_class=...)]` MUST pass the EXACT same `module:Class` string the flyer's `DeviceInfo.device_class` is registered with. Keep both pointing at one shared `FLYER_DEVICE_CLASS` constant.
+
+### (b) non-Readable flyer in the device catalog — NONE NEEDED
+
+`PystxmLineFlyer` is NOT Readable: `read()/describe()/read_configuration()/describe_configuration()/position/get()/connected` ALL absent (only `name`, `prepare`, `kickoff`, `complete`, `describe_collect`, `collect`).
+
+Registering it as a `DeviceInfo` (DETECTOR, `_ophyd_device=flyer`) and exercising every catalog state/status/list/summary/resolve path **did not raise** — all 8 paths OK:
+```
+list_devices() / list_devices(DETECTOR) / get_device_by_name / state.status / to_summary()
+/ search_devices / refresh_device_state / get_ophyd_device   -> all OK
+=> non-Readable flyer broke the catalog path? NO
+```
+Why it's safe (pinned in source):
+- `_add_device_internal` (package `backend.py`) sets `DeviceState` from `device._ophyd_device is not None` — never reads the device.
+- `DeviceInfo.to_summary()` reads only `self._state` — never the ophyd device.
+- `DeviceCatalog.refresh_device_state` is the ONLY path that probes the device, and it does so behind `hasattr(ophyd_dev, "position")` and `hasattr(ophyd_dev, "get")` guards (the `get()` call is also in a try/except). On the flyer both are absent, so it returns a plain ONLINE state.
+- `mark_device_live` probes `getattr(ophyd_device, "connected", False)` (guarded) — not on the registration path used here.
+- `DeviceConnectionManager` is NOT exercised when the backend pre-sets `_ophyd_device` (the spike registers via `_add_device_internal`, like Phase-1 does).
+
+**Conclusion: do NOT add any `Readable` stub methods to `PystxmLineFlyer`. None are needed for the catalog/launch path.** (It is registered as a catalog DETECTOR purely for name-resolution; it is consumed by the plan as a Flyable, not read() by Bluesky.)
+
+### Exact flyer DeviceInfo registration call (copy-paste for Task 2)
+
+```python
+from lightfall.devices.model import ConnectionType, DeviceCategory, DeviceInfo
+
+FLYER_DEVICE_CLASS = "lightfall_pystxmcontrol.flyer:PystxmLineFlyer"
+
+flyer_info = DeviceInfo(
+    name="STXMLineFlyer",
+    description="Simulated pystxmcontrol STXM line flyer",
+    device_class=FLYER_DEVICE_CLASS,             # MUST equal the DeviceFilter(device_class=...) string
+    category=DeviceCategory.DETECTOR,            # no FLYER category exists; DETECTOR is correct
+    connection_type=ConnectionType.SIMULATED,
+    prefix="STXMLineFlyer",
+    tags=["flyer", "stxm", "pystxmcontrol", "simulated"],
+    metadata={},
+)
+flyer_info._ophyd_device = flyer                 # the connected PystxmLineFlyer instance
+# then register it the way backend.py does its own devices:
+backend._add_device_internal(flyer_info)
+backend._ophyd_devices["STXMLineFlyer"] = flyer  # so get_ophyd_device() finds it too
+```
+The Phase-1 `PystxmStxmBackend.connect()` is the natural home: extend it to also build+connect the flyer and register it with the same `_add_device_internal` pattern it already uses for SampleX/SampleY/Counter1.
+
+### (d) Exact resolve + run call sequence — PINNED (copy-paste for Task 4)
+
+The UI delivers device params as **name strings**; `_resolve_device_kwargs` (which keys off the live pyqtgraph param tree's `type=="device"`) replaces them with ophyd instances via `_resolve_single_device` -> `catalog.get_device_by_name(name).ophyd_device`. At API level (no Qt tree) the equivalent is:
+
+```python
+catalog = DeviceCatalog.get_instance()
+
+def resolve(name):                               # mirrors BlueskyPanel._resolve_single_device
+    di = catalog.get_device_by_name(name)
+    return di.ophyd_device                        # already-connected instance (else request_device_connection)
+
+resolved = {
+    "flyer":  resolve("STXMLineFlyer"),
+    "y_axis": resolve("SampleY"),
+    "y_start": -5.0, "y_stop": 5.0, "ny": 6,
+    "x_start": -5.0, "x_stop": 5.0, "nx": 10, "dwell": 1.0,
+}
+
+# In the real panel:  self._engine(plan_info.func(**resolved))
+# Headless spike (Engine is a heavy Qt QObject w/ background queue) used a bare RunEngine,
+# which proves the same binding contract:
+from bluesky import RunEngine
+docs = []
+RE = RunEngine({})
+RE(plan_info.func(**resolved), lambda n, d: docs.append((n, d)))
+```
+**Engine note for Task 4:** `lightfall.acquire.get_engine()` returns a `BaseEngine(QObject)` with a priority queue + background worker thread — heavy, Qt-bound, and async. For a deterministic headless test, drive a **bare `RunEngine({})`** (brief-sanctioned). The binding contract (`func(**resolved)` -> generator -> engine call) is identical; only the executor differs.
+
+End-to-end result (bluesky 1.14.6 — emits `event_page`, per Phase 2a):
+```
+document names: ['start', 'descriptor', 'event_page', 'event_page', 'event_page', 'event_page', 'event_page', 'event_page', 'stop']
+event_page count: 6 (expected ny=6)
+positive-count pages: 6/6  total counts=600073.0
+```
+`event_page["data"]["STXMLineFlyer"][0]` is the per-line count array (list-wrapped -> `[0]`, per Phase 2a).
+
+### Representative spike stdout (lazy-import-guard noise + loguru lines elided)
+
+```
+--- (a) PlanInfo.from_function field names ---
+type(info): PlanInfo
+PlanInfo public fields: ['name', 'func', 'signature', 'description', 'category', 'parameters', 'examples', 'display_name', 'icon']
+type(parameters[0]): ParameterInfo
+ParameterInfo fields: ['name', 'annotation', 'default', 'kind', 'description'] + props: required, type_name
+  name='flyer'  type_name='Annotated[Any, DeviceFilter(device_class=FLYER_DEVICE_CLASS)]' required=True  ...
+  name='ny'     type_name='Annotated[int, Range(1, 10000)]' required=False default=6 ...
+
+--- (b) non-Readable flyer in the device catalog ---
+backend.connect(): True device_count: 3
+flyer has read(): False  describe(): False  position: False  get(): False  connected: False
+  OK   list_devices(): ['SampleX', 'SampleY', 'Counter1', 'STXMLineFlyer']
+  OK   list_devices(DETECTOR): ['Counter1', 'STXMLineFlyer']
+  OK   get_device_by_name('STXMLineFlyer'): 'STXMLineFlyer'
+  OK   flyer_info.state.status: 'online'
+  OK   refresh_device_state(flyer): 'online'
+  OK   get_ophyd_device('STXMLineFlyer'): 'PystxmLineFlyer'
+  => non-Readable flyer broke the catalog path? NO (no path read()/describe()/position/value on it)
+
+--- (c) DeviceFilter(device_class=...) matching ---
+  DeviceFilter(device_class='lightfall_pystxmcontrol.flyer:PystxmLineFlyer') selects: ['STXMLineFlyer']
+  bare-class fallback DeviceFilter(device_class='PystxmLineFlyer') selects: []
+  DeviceFilter(category='motor') selects: ['SampleX', 'SampleY']
+
+--- (d) end-to-end launch path ---
+  resolved flyer: PystxmLineFlyer name= STXMLineFlyer
+  resolved y_axis: PystxmAxis name= SampleY
+  event_page count: 6 (expected ny=6)
+  positive-count pages: 6/6  total counts=600073.0
+  end-to-end run: PASS
+
+--- Phase 2b spike complete ---
+```
+(Preceded by the expected ~10-line pystxmcontrol lazy-import-guard noise + a few loguru INFO/DEBUG lines.)
