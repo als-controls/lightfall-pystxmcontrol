@@ -44,6 +44,8 @@ def test_adapter_delegates_to_pure_plan():
     names = [n for n, _ in docs]
     assert names[0] == "start" and names[-1] == "stop"
     assert names.count("event_page") == 3
+    ev = next(d for n, d in docs if n == "event_page")
+    assert "STXMLineFlyer" in ev["data"]
 
 
 def test_flyer_device_class_matches_backend_registration():
