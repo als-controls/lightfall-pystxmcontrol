@@ -3,6 +3,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
+from bluesky import RunEngine
 
 from lightfall_pystxmcontrol.backend import PystxmStxmBackend
 from lightfall_pystxmcontrol.plan_plugin import StxmFlyRasterPlanPlugin
@@ -20,7 +21,6 @@ nx, ny = 10, 6
 
 # Bare RunEngine proves the same launch contract as the UI path
 # (plan/engine path is plan-agnostic — Phase 1/2a finding).
-from bluesky import RunEngine
 docs = []
 RE = RunEngine()
 RE(plan_func(flyer, y_axis, y_start=-5, y_stop=5, ny=ny,
@@ -34,5 +34,6 @@ assert names[:1] == ["start"] and names[-1:] == ["stop"], names[:3]
 assert len(rows) == ny, f"expected {ny} lines, got {len(rows)}"
 allcounts = np.concatenate([np.asarray(r) for r in rows])
 assert allcounts.shape == (ny * nx,), f"expected {ny*nx} pixels, got {allcounts.shape}"
+assert allcounts.min() > 0, f"expected positive counts, got min={allcounts.min()}"
 print(f"fly raster launchable via Lightfall (backend+plan plugin): {ny} lines x {nx} pts; "
       f"min={allcounts.min():.0f} max={allcounts.max():.0f}")
