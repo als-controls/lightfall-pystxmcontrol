@@ -27,6 +27,12 @@ test = ["pytest", "pytest-asyncio"]
 [tool.hatch.version]
 source = "vcs"
 
+# The `hardware` optional-dependency pins pystxmcontrol to a git URL (a direct
+# reference); hatchling requires this opt-in to allow it, else metadata
+# generation fails on a fresh `pip install` (strict hatchling).
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/lightfall_pystxmcontrol"]
 
