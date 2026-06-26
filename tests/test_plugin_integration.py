@@ -20,15 +20,24 @@ def test_plugin_creates_backend():
 
 
 def test_grid_scan_via_backend_devices():
+    import asyncio
+
     from bluesky import RunEngine
 
     from lightfall_pystxmcontrol.plugin import PystxmBackendPlugin
 
     be = PystxmBackendPlugin().create_backend()
     be.connect()
-    x = be.get_device_by_name("SampleX")._ophyd_device
-    y = be.get_device_by_name("SampleY")._ophyd_device
-    det = be.get_device_by_name("Counter1")._ophyd_device
+    # HappiBackend with instantiate="background" defers ophyd construction
+    # until the Qt DeviceConnectionManager fires. In tests without a Qt event
+    # loop, call be.instantiate() explicitly then connect() so _motor/_daq are
+    # initialised before the RunEngine drives the plan.
+    x = be.instantiate(be.get_device_by_name("SampleX"))
+    y = be.instantiate(be.get_device_by_name("SampleY"))
+    det = be.instantiate(be.get_device_by_name("Counter1"))
+    asyncio.run(x.connect())
+    asyncio.run(y.connect())
+    asyncio.run(det.connect())
 
     docs = []
     RunEngine()(bp.grid_scan([det], x, -1, 1, 2, y, -1, 1, 2),
