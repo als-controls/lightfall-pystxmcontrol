@@ -148,36 +148,80 @@ class TestStxmMapVisualization:
         viz = StxmMapVisualization()
         assert viz.current_image() is None
 
-    def test_can_handle_returns_nonzero_for_stxm_run(self):
-        """can_handle returns >0 when run contains STXMLineFlyer node."""
+    def test_can_handle_high_score_on_start_plan_name(self):
+        """can_handle scores high on start-doc plan_name == stxm_fly_raster.
+
+        This is the real top-level signal: the panel passes the BlueskyRun
+        entry whose metadata["start"]["plan_name"] identifies the plan.
+        """
         from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
 
-        # Stub run that behaves like a Tiled container with __contains__
         class _FakeRun:
+            metadata = {"start": {"plan_name": "stxm_fly_raster"}}
+
+        assert StxmMapVisualization.can_handle(_FakeRun()) >= 95
+
+    def test_can_handle_high_score_on_primary_probe(self):
+        """can_handle falls back to probing run['primary'] for the flyer key."""
+        from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
+
+        class _Primary:
             def __contains__(self, key):
                 return key == "STXMLineFlyer"
 
-        assert StxmMapVisualization.can_handle(_FakeRun()) > 0
+        class _FakeRun:
+            # No useful start metadata -> exercise the primary-probe fallback.
+            metadata = {"start": {"plan_name": "some_other_plan"}}
+
+            def __getitem__(self, key):
+                if key == "primary":
+                    return _Primary()
+                raise KeyError(key)
+
+        assert StxmMapVisualization.can_handle(_FakeRun()) >= 95
 
     def test_can_handle_returns_zero_for_other_run(self):
-        """can_handle returns 0 for a run that does not have STXMLineFlyer."""
+        """can_handle returns 0 for a non-STXM run (wrong plan, no flyer)."""
         from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
 
-        class _FakeRun:
+        class _Primary:
             def __contains__(self, key):
                 return False
+
+        class _FakeRun:
+            metadata = {"start": {"plan_name": "grid_scan"}}
+
+            def __getitem__(self, key):
+                if key == "primary":
+                    return _Primary()
+                raise KeyError(key)
 
         assert StxmMapVisualization.can_handle(_FakeRun()) == 0
 
     def test_can_handle_returns_zero_on_exception(self):
-        """can_handle is robust: returns 0 if run raises on membership test."""
+        """can_handle is robust: returns 0 if the run raises on access."""
         from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
 
         class _BrokenRun:
-            def __contains__(self, key):
+            @property
+            def metadata(self):
+                raise RuntimeError("no catalog")
+
+            def __getitem__(self, key):
                 raise RuntimeError("no catalog")
 
         assert StxmMapVisualization.can_handle(_BrokenRun()) == 0
+
+    def test_can_handle_returns_zero_on_missing_metadata(self):
+        """can_handle returns 0 when run has no metadata and no primary."""
+        from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
+
+        class _BareRun:
+            # No metadata attribute; __getitem__ raises (no primary stream yet).
+            def __getitem__(self, key):
+                raise KeyError(key)
+
+        assert StxmMapVisualization.can_handle(_BareRun()) == 0
 
     def test_viz_name(self):
         from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization

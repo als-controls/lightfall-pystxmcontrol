@@ -158,17 +158,43 @@ class StxmMapVisualization(BaseVisualization):
     def can_handle(run: Any) -> int:
         """Score 0-100 for how well this viz handles the given run.
 
-        Returns 95 if the run's primary stream contains a ``STXMLineFlyer``
-        node (the fly-scan detector array keyed by the flyer's name).  The
-        detection uses ``__contains__`` on the run object (robust to any Tiled
-        container or stub that supports ``in`` membership) and returns 0 on any
-        exception so missing catalogs or partially-formed runs never crash the
+        The panel passes the TOP-LEVEL BlueskyRun entry.  The fly-scan map array
+        lives at ``run["primary"]["STXMLineFlyer"]`` (a child of the primary
+        stream), NOT as a direct top-level child — so ``"STXMLineFlyer" in run``
+        is unreliable at the top level.  Instead, identify an STXM fly-scan run
+        by the most reliable signal first:
+
+        1. **Start-doc plan name** (best): the Phase-2b plan sets
+           ``plan_name="stxm_fly_raster"`` in the run metadata
+           (``plans.py``), which is reliably present at the top level from
+           scan start.  Score 95 on a match.
+        2. **Primary-stream probe** (fallback): look for the ``STXMLineFlyer``
+           key inside ``run["primary"]`` via ``__contains__``.  Score 95.
+
+        The whole body is wrapped in ``try/except -> 0`` so a missing catalog,
+        a partially-formed run, or any container that raises can never crash the
         selector.
 
-        Note: Task 6's end-to-end run definitively confirms the node key.
+        Note: Task 6's end-to-end run definitively confirms it scores +
+        auto-selects on a real STXM fly-scan.
         """
         try:
-            return 95 if _MAP_FIELD in run else 0
+            # 1. Start-doc plan name — the most reliable top-level signal.
+            metadata = getattr(run, "metadata", None)
+            if metadata is not None:
+                start = metadata.get("start", {}) or {}
+                if start.get("plan_name") == "stxm_fly_raster":
+                    return 95
+
+            # 2. Fallback: probe the primary stream for the flyer key.
+            try:
+                primary = run["primary"]
+            except Exception:
+                primary = None
+            if primary is not None and _MAP_FIELD in primary:
+                return 95
+
+            return 0
         except Exception:
             return 0
 
