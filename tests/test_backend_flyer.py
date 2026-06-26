@@ -19,8 +19,8 @@ def test_backend_registers_flyer_device():
 
     flyer_info = backend.get_device_by_name("STXMLineFlyer")
     assert flyer_info is not None
-    # HappiBackend derives category from the happi DB; pystxm_happi.json uses "controller"
-    assert flyer_info.category == DeviceCategory.CONTROLLER
+    # PystxmLineFlyer implements bluesky.protocols.Flyable → DETECTOR via MRO map
+    assert flyer_info.category == DeviceCategory.DETECTOR
     assert flyer_info.device_class == "lightfall_pystxmcontrol.flyer.PystxmLineFlyer"
     # Clear happi's process-global object cache so we always get a freshly-constructed
     # object regardless of test-execution order.  happi.loader.cache is keyed by device
@@ -36,7 +36,6 @@ def test_backend_still_registers_phase1_devices():
     backend = _backend()
     names = {d.name for d in backend.list_devices(active_only=False)}
     assert {"SampleX", "SampleY", "Counter1", "STXMLineFlyer"} <= names
-    # HappiBackend's _guess_category falls back to CONTROLLER for ophyd-async devices
-    # whose base classes (StandardReadable etc.) are not in the classic-ophyd MRO map.
-    # The important thing is that all four devices are present and loadable.
+    # HappiBackend's _guess_category maps bluesky protocol subclasses via MRO:
+    # Movable→MOTOR, Triggerable/Flyable→DETECTOR.  All four devices must be present.
     assert backend.get_device_by_name("Counter1") is not None
