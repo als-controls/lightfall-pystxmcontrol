@@ -53,3 +53,14 @@ def test_axis_connects_and_reads_via_pipeline(running_engine):
     # functional: readback reads a real value from the sim motor
     reading = asyncio.run_coroutine_threadsafe(obj.read(), running_engine.loop).result(5.0)
     assert "SampleX" in reading
+
+
+def test_flyer_connects_and_is_operational(running_engine):
+    """STXMLineFlyer is OPERATIONAL after check_connection drives connect()."""
+    be = _backend()
+    info = next(d for d in be.list_devices(active_only=False) if d.name == "STXMLineFlyer")
+    obj = be.instantiate(info)              # constructs (not connected yet)
+    assert obj._daq is None                 # sim DAQ not built until connect()
+    ok = be.check_connection(obj, timeout=5.0)  # async path drives connect()
+    assert ok is True
+    assert obj._daq is not None             # sim DAQ built; flyer is operational

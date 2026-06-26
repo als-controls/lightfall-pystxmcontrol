@@ -1,6 +1,7 @@
 # tests/test_backend_flyer.py — updated to use HappiBackend (PystxmStxmBackend retired)
 from importlib.resources import files
 
+import happi.loader
 from lightfall.devices.backends.happi import HappiBackend
 from lightfall.devices.model import DeviceCategory
 from lightfall_pystxmcontrol.flyer import PystxmLineFlyer
@@ -21,6 +22,10 @@ def test_backend_registers_flyer_device():
     # HappiBackend derives category from the happi DB; pystxm_happi.json uses "controller"
     assert flyer_info.category == DeviceCategory.CONTROLLER
     assert flyer_info.device_class == "lightfall_pystxmcontrol.flyer.PystxmLineFlyer"
+    # Clear happi's process-global object cache so we always get a freshly-constructed
+    # object regardless of test-execution order.  happi.loader.cache is keyed by device
+    # name; removing the entry forces from_container() to call __init__ again.
+    happi.loader.cache.pop("STXMLineFlyer", None)
     # instantiate builds the object (daq not yet connected — that happens in check_connection)
     obj = backend.instantiate(flyer_info)
     assert isinstance(obj, PystxmLineFlyer)
