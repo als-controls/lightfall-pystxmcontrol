@@ -8,9 +8,10 @@ from lightfall.ui.annotations import DeviceFilter, Range, Unit
 from .flyer import PystxmLineFlyer
 from .plans import stxm_fly_raster
 
-# Derived from the flyer class to guarantee byte-identity with what the backend
-# registers via f"{type(dev).__module__}:{type(dev).__name__}".
-FLYER_DEVICE_CLASS = f"{PystxmLineFlyer.__module__}:{PystxmLineFlyer.__name__}"
+# Derived from the flyer class to guarantee byte-identity with what HappiBackend
+# stores: Python dotted import path (module.ClassName), matching the device_class
+# field in pystxm_happi.json.
+FLYER_DEVICE_CLASS = f"{PystxmLineFlyer.__module__}.{PystxmLineFlyer.__name__}"
 
 
 def _stxm_fly_raster_ui(
