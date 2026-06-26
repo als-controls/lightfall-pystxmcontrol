@@ -21,10 +21,24 @@ wraps the *driver* objects only — pystxmcontrol's GUI, ZMQ client,
 | `PystxmLineFlyer` | `flyer.py` | bluesky `Flyable`/`Collectable` over a pystxmcontrol `daq` (sim) — flies one raster line per `getLine()`, per-row dwell via `prepare()` |
 | `stxm_fly_raster` | `plans.py` | line-fly raster plan — steps the slow axis (Y), flies the fast axis (X) per row, one event per line |
 | `StxmFlyRasterPlanPlugin` | `plan_plugin.py` | `PlanPlugin` surfacing the fly raster in Lightfall's plan registry/UI |
-| `PystxmStxmBackend` | `backend.py` | Lightfall `DeviceBackend` — builds/connects the devices, registers them in the `DeviceCatalog` |
-| `PystxmBackendPlugin` | `plugin.py` | `DeviceBackendPlugin` so Lightfall discovers the backend |
+| `PystxmBackendPlugin` | `plugin.py` | `HappiDatabasePlugin` subclass — loads the packaged happi DB and registers devices via Lightfall's built-in `HappiBackend` |
+| device database | `pystxm_happi.json` | happi JSON device database (regenerate via `scripts/build_pystxm_happi_db.py`) |
 | `manifest` | `manifest.py` | `PluginManifest` on the `lightfall.plugins` entry point (device backend, plan, visualization) |
 | sim config | `config.py` | in-repo motor/daq config dicts + `make_sim_motor`/`make_sim_counter` wiring |
+
+## Devices
+
+Device instances are defined in `src/lightfall_pystxmcontrol/pystxm_happi.json` and loaded by
+Lightfall's built-in `HappiBackend` through the `HappiDatabasePlugin` base class.
+`PystxmBackendPlugin` subclasses `HappiDatabasePlugin` and points it at this packaged JSON;
+no hand-written `DeviceBackend` is needed. The device classes (`PystxmAxis`, `PystxmCounter`,
+`PystxmLineFlyer`) are ophyd-async and are connected by Lightfall's device pipeline.
+
+To regenerate the database after adding or renaming devices:
+
+```bash
+python scripts/build_pystxm_happi_db.py
+```
 
 Devices connect with `mock=False` so pystxmcontrol's own `simulation=True` code
 path runs — we exercise David's drivers, not ophyd-async's mock. Signals are
