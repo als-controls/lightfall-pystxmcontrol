@@ -139,6 +139,44 @@ class PystxmStxmBackend(DeviceBackend):
         self._maintenance.clear()
         logger.info("PystxmStxmBackend disconnected")
 
+    # === Unified Load Pipeline Hooks ===
+
+    def load_metadata(self) -> list[DeviceInfo]:
+        """Return DeviceInfo metadata for the simulated pystxmcontrol devices.
+
+        Connects first (building + connecting the ophyd devices) if not already
+        connected, then returns the registered DeviceInfo entries. Self-
+        connecting and idempotent, matching the unified load pipeline contract
+        that ``DeviceCatalog._load_and_connect_backend`` drives (mirrors
+        ``MockBackend.load_metadata``).
+
+        Raises:
+            RuntimeError: if the backend fails to connect/build its devices, so
+                the catalog routes to ``_on_error`` and does not emit
+                ``backend_connected``.
+        """
+        if not self._connected and not self.connect():
+            raise RuntimeError("PystxmStxmBackend failed to connect")
+        return list(self._devices.values())
+
+    def instantiate(self, info: DeviceInfo) -> Any:
+        """Return the connected ophyd-async object for *info*.
+
+        The ophyd devices are built and connected in :meth:`connect` (invoked by
+        :meth:`load_metadata`); this looks the instance up by name.
+
+        Args:
+            info: A DeviceInfo previously returned by :meth:`load_metadata`.
+
+        Returns:
+            The ophyd-async device instance, or None if not found.
+        """
+        return self._ophyd_devices.get(info.name)
+
+    def check_connection(self, obj: Any, timeout: float) -> bool:
+        """Simulated devices are connected during :meth:`connect`; always ready."""
+        return True
+
     # === Internal helpers ===
 
     def _add_device_internal(self, device: DeviceInfo) -> None:
