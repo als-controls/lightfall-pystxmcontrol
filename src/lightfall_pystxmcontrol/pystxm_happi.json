@@ -1,0 +1,102 @@
+{
+    "Counter1": {
+        "_id": "Counter1",
+        "active": true,
+        "args": [],
+        "creation": "Fri Jun 26 11:47:33 2026",
+        "device_class": "lightfall_pystxmcontrol.devices.PystxmCounter",
+        "documentation": null,
+        "kwargs": {
+            "daq_config": {
+                "address": "sim",
+                "driver": "keysight53230A",
+                "name": "Counter1",
+                "port": 5025,
+                "record": true,
+                "simulation": true,
+                "type": "point"
+            },
+            "dwell": 1.0,
+            "name": "{{name}}"
+        },
+        "last_edit": "Fri Jun 26 11:47:33 2026",
+        "name": "Counter1",
+        "prefix": "",
+        "type": "OphydItem"
+    },
+    "STXMLineFlyer": {
+        "_id": "STXMLineFlyer",
+        "active": true,
+        "args": [],
+        "creation": "Fri Jun 26 11:47:33 2026",
+        "device_class": "lightfall_pystxmcontrol.flyer.PystxmLineFlyer",
+        "documentation": null,
+        "kwargs": {
+            "daq_config": {
+                "address": "sim",
+                "driver": "keysight53230A",
+                "name": "Counter1",
+                "port": 5025,
+                "record": true,
+                "simulation": true,
+                "type": "point"
+            },
+            "name": "{{name}}",
+            "x_axis_config": {
+                "axis": "X",
+                "maxValue": 100.0,
+                "minValue": -100.0,
+                "offset": 0.0,
+                "units": 1.0
+            }
+        },
+        "last_edit": "Fri Jun 26 11:47:33 2026",
+        "name": "STXMLineFlyer",
+        "prefix": "",
+        "type": "OphydItem"
+    },
+    "SampleX": {
+        "_id": "SampleX",
+        "active": true,
+        "args": [],
+        "creation": "Fri Jun 26 11:47:33 2026",
+        "device_class": "lightfall_pystxmcontrol.devices.PystxmAxis",
+        "documentation": null,
+        "kwargs": {
+            "axis_config": {
+                "axis": "X",
+                "maxValue": 100.0,
+                "minValue": -100.0,
+                "offset": 0.0,
+                "units": 1.0
+            },
+            "name": "{{name}}"
+        },
+        "last_edit": "Fri Jun 26 11:47:33 2026",
+        "name": "SampleX",
+        "prefix": "",
+        "type": "OphydItem"
+    },
+    "SampleY": {
+        "_id": "SampleY",
+        "active": true,
+        "args": [],
+        "creation": "Fri Jun 26 11:47:33 2026",
+        "device_class": "lightfall_pystxmcontrol.devices.PystxmAxis",
+        "documentation": null,
+        "kwargs": {
+            "axis_config": {
+                "axis": "Y",
+                "maxValue": 100.0,
+                "minValue": -100.0,
+                "offset": 0.0,
+                "units": 1.0
+            },
+            "name": "{{name}}"
+        },
+        "last_edit": "Fri Jun 26 11:47:33 2026",
+        "name": "SampleY",
+        "prefix": "",
+        "type": "OphydItem"
+    }
+}
