@@ -230,6 +230,85 @@ class TestStxmMapVisualization:
 
 
 # ---------------------------------------------------------------------------
+# StxmMapVisualization — auto-LUT (auto levels) tests
+# ---------------------------------------------------------------------------
+
+
+class TestStxmMapAutoLut:
+    def test_auto_levels_default_tracks_data_range(self):
+        """By default, levels auto-scale to the image's finite min/max."""
+        _qapp()
+        from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
+
+        viz = StxmMapVisualization()
+        viz.begin_map(ny=4, nx=8)
+        line = np.arange(8, dtype=float) + 1.0  # 1..8
+        viz.on_stream_update(_make_array_data(row=2, line=line))
+
+        # Whole-array finite range: unfilled rows are 0 -> min 0, max 8.
+        lo, hi = viz._image_view.getLevels()
+        assert lo == pytest.approx(0.0)
+        assert hi == pytest.approx(8.0)
+        assert viz._auto_levels is True, "auto must stay on after an auto render"
+
+    def test_auto_levels_follow_growing_max(self):
+        """Each blit re-scales levels while auto is on."""
+        _qapp()
+        from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
+
+        viz = StxmMapVisualization()
+        viz.begin_map(ny=3, nx=4)
+
+        viz.on_stream_update(_make_array_data(row=0, line=np.full(4, 8.0)))
+        _, hi = viz._image_view.getLevels()
+        assert hi == pytest.approx(8.0)
+
+        viz.on_stream_update(_make_array_data(row=1, line=np.full(4, 50.0)))
+        _, hi = viz._image_view.getLevels()
+        assert hi == pytest.approx(50.0)
+
+    def test_manual_level_change_disables_auto(self):
+        """A manual histogram adjustment freezes levels; later blits don't rescale."""
+        _qapp()
+        from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
+
+        viz = StxmMapVisualization()
+        viz.begin_map(ny=3, nx=4)
+        viz.on_stream_update(_make_array_data(row=0, line=np.full(4, 8.0)))
+
+        # Simulate the user dragging the histogram region (happens outside
+        # _render, so the auto-apply guard is not active).
+        viz._image_view.getHistogramWidget().setLevels(2.0, 5.0)
+        assert viz._auto_levels is False, "manual adjustment must disable auto"
+
+        # A subsequent line with a much larger value must NOT rescale.
+        viz.on_stream_update(_make_array_data(row=1, line=np.full(4, 999.0)))
+        lo, hi = viz._image_view.getLevels()
+        assert lo == pytest.approx(2.0)
+        assert hi == pytest.approx(5.0)
+
+    def test_live_update_uses_image_item_not_imageview_setimage(self):
+        """Live blits go through ImageItem.updateImage, not ImageView.setImage."""
+        _qapp()
+        from lightfall_pystxmcontrol.stxm_map_viz import StxmMapVisualization
+
+        viz = StxmMapVisualization()
+        viz.begin_map(ny=3, nx=4)  # builds the view
+
+        iv_setimage_calls = []
+        item_update_calls = []
+        viz._image_view.setImage = lambda *a, **k: iv_setimage_calls.append((a, k))
+        item = viz._image_view.getImageItem()
+        orig_update = item.updateImage
+        item.updateImage = lambda *a, **k: (item_update_calls.append((a, k)), orig_update(*a, **k))[1]
+
+        viz.on_stream_update(_make_array_data(row=1, line=np.full(4, 3.0)))
+
+        assert item_update_calls, "live update must call ImageItem.updateImage"
+        assert not iv_setimage_calls, "live update must NOT call ImageView.setImage"
+
+
+# ---------------------------------------------------------------------------
 # StxmMapVizPlugin — unit tests
 # ---------------------------------------------------------------------------
 
