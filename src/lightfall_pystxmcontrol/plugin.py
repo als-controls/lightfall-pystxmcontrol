@@ -1,29 +1,22 @@
-"""Lightfall DeviceBackendPlugin for pystxmcontrol simulated STXM devices."""
-
-from lightfall.plugins.device_backend_plugin import DeviceBackendPlugin
-
-from .backend import PystxmStxmBackend
+"""Lightfall HappiDatabasePlugin for pystxmcontrol simulated STXM devices."""
+from lightfall.plugins.happi_database_plugin import HappiDatabasePlugin
 
 
-class PystxmBackendPlugin(DeviceBackendPlugin):
-    """Lightfall plugin that exposes simulated pystxmcontrol STXM devices.
+class PystxmBackendPlugin(HappiDatabasePlugin):
+    """Exposes simulated pystxmcontrol STXM devices from a packaged happi DB.
 
     Registered as a ``device_backend`` plugin under the ``lightfall.plugins``
-    entry-point group.  Calling :meth:`create_backend` returns a fresh
-    :class:`~lightfall_pystxmcontrol.backend.PystxmStxmBackend` instance
-    ready to be connected.
+    entry-point group. The device set ships as ``pystxm_happi.json`` inside this
+    package and is loaded by Lightfall's built-in HappiBackend.
     """
+
+    database_resource = ("lightfall_pystxmcontrol", "pystxm_happi.json")
+    instantiate = "background"
 
     @property
     def name(self) -> str:
-        """Return the plugin / backend identifier."""
         return "pystxmcontrol"
 
     @property
     def description(self) -> str:
-        """Return a human-readable description."""
         return "Simulated pystxmcontrol STXM devices (motors + counter)"
-
-    def create_backend(self) -> PystxmStxmBackend:
-        """Instantiate and return a new PystxmStxmBackend."""
-        return PystxmStxmBackend()

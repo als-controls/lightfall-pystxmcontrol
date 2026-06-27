@@ -3,11 +3,12 @@
 ophyd-async wrappers that expose David Shapiro's
 [`pystxmcontrol`](https://github.com/davidalexandershapiro/pystxmcontrol) STXM
 device drivers to the [Lightfall](https://git.als.lbl.gov/ncs) control
-dashboard, so a **simulated STXM 2D-raster bluesky scan** can run inside
-Lightfall with no real hardware.
+dashboard, so a **simulated STXM bluesky scan** — both a step-mode 2D raster
+and a **line fly raster** (`getLine`) — can run inside Lightfall with no real
+hardware.
 
-This is a **Phase-1 simulation prototype** (a collaboration spike with David,
-ALS). It wraps the *driver* objects only — pystxmcontrol's GUI, ZMQ client,
+This is a **simulation prototype** (a collaboration spike with David, ALS). It
+wraps the *driver* objects only — pystxmcontrol's GUI, ZMQ client,
 `stxmserver`, and its own asyncio scan engine are **not** used; Lightfall's
 `BlueskyEngine`/`RunEngine` does the orchestration.
 
@@ -17,10 +18,27 @@ ALS). It wraps the *driver* objects only — pystxmcontrol's GUI, ZMQ client,
 |---|---|---|
 | `PystxmAxis` | `devices.py` | ophyd-async positioner over a pystxmcontrol `motor` (sim) |
 | `PystxmCounter` | `devices.py` | ophyd-async detector over a pystxmcontrol `daq` (sim, Poisson counts) |
-| `PystxmStxmBackend` | `backend.py` | Lightfall `DeviceBackend` — builds/connects the devices, registers them in the `DeviceCatalog` |
-| `PystxmBackendPlugin` | `plugin.py` | `DeviceBackendPlugin` so Lightfall discovers the backend |
-| `manifest` | `manifest.py` | `PluginManifest` on the `lightfall.plugins` entry point |
+| `PystxmLineFlyer` | `flyer.py` | bluesky `Flyable`/`Collectable` over a pystxmcontrol `daq` (sim) — flies one raster line per `getLine()`, per-row dwell via `prepare()` |
+| `stxm_fly_raster` | `plans.py` | line-fly raster plan — steps the slow axis (Y), flies the fast axis (X) per row, one event per line |
+| `StxmFlyRasterPlanPlugin` | `plan_plugin.py` | `PlanPlugin` surfacing the fly raster in Lightfall's plan registry/UI |
+| `PystxmBackendPlugin` | `plugin.py` | `HappiDatabasePlugin` subclass — loads the packaged happi DB and registers devices via Lightfall's built-in `HappiBackend` |
+| device database | `pystxm_happi.json` | happi JSON device database (regenerate via `scripts/build_pystxm_happi_db.py`) |
+| `manifest` | `manifest.py` | `PluginManifest` on the `lightfall.plugins` entry point (device backend, plan, visualization) |
 | sim config | `config.py` | in-repo motor/daq config dicts + `make_sim_motor`/`make_sim_counter` wiring |
+
+## Devices
+
+Device instances are defined in `src/lightfall_pystxmcontrol/pystxm_happi.json` and loaded by
+Lightfall's built-in `HappiBackend` through the `HappiDatabasePlugin` base class.
+`PystxmBackendPlugin` subclasses `HappiDatabasePlugin` and points it at this packaged JSON;
+no hand-written `DeviceBackend` is needed. The device classes (`PystxmAxis`, `PystxmCounter`,
+`PystxmLineFlyer`) are ophyd-async and are connected by Lightfall's device pipeline.
+
+To regenerate the database after adding or renaming devices:
+
+```bash
+python scripts/build_pystxm_happi_db.py
+```
 
 Devices connect with `mock=False` so pystxmcontrol's own `simulation=True` code
 path runs — we exercise David's drivers, not ophyd-async's mock. Signals are
@@ -69,19 +87,28 @@ python -m pip install -e . --no-deps
 ```bash
 .venv/Scripts/python -m pytest          # never bare `pytest`
 ```
-Phase-1 tests (`test_backend.py`, `test_plugin_integration.py`) require
-Lightfall's 3.14 venv (they import `lightfall`).
+Tests that import `lightfall` (`test_backend.py`, `test_backend_flyer.py`,
+`test_plugin_integration.py`) require Lightfall's 3.14 venv. The bare-RunEngine
+fly tests (`test_fly_raster.py`, `test_flyer.py`) run on either venv.
 
 ## Smoke scripts
 
 ```bash
-.venv/Scripts/python scripts/smoke_raw.py        # raw pystxmcontrol sim path (no ophyd)
-.venv/Scripts/python scripts/smoke_gridscan.py   # 2D raster on a bare RunEngine (Phase 0)
-.venv/Scripts/python scripts/smoke_lightfall.py  # 2D raster via Lightfall's BlueskyEngine (Phase 1)
+# step-mode 2D raster
+.venv/Scripts/python scripts/smoke_raw.py             # raw pystxmcontrol sim path (no ophyd)
+.venv/Scripts/python scripts/smoke_gridscan.py        # 2D raster on a bare RunEngine
+.venv/Scripts/python scripts/smoke_lightfall.py       # 2D raster via Lightfall's BlueskyEngine
+
+# line fly raster
+.venv/Scripts/python scripts/smoke_getline.py         # raw getLine() sim path (no ophyd)
+.venv/Scripts/python scripts/smoke_flyscan_lightfall.py  # fly raster via Lightfall's BlueskyEngine
+.venv/Scripts/python scripts/smoke_flyscan_ui.py      # fly raster via the plan-plugin + device-binding path
 ```
 `smoke_lightfall.py` enqueues the plan via `engine(plan)` (the `BlueskyEngine`
 runs its RunEngine on a worker thread) and prints e.g.
 `grid_scan ran via Lightfall BlueskyEngine: 25 points; min=... max=...`.
+`smoke_flyscan_lightfall.py` prints e.g.
+`fly raster ran via Lightfall BlueskyEngine: 6 lines x 10 pts; min=... max=...`.
 
 ## Upstream fork & PR
 
@@ -102,8 +129,15 @@ Once David merges upstream, repoint the `hardware` dependency in
 `pyproject.toml` (and the install command above) at his upstream tag/commit and
 retire the fork.
 
-## Out of scope (Phase 2+)
+## Implemented since Phase 1
 
-Fly scanning (`getLine` + `StandardFlyer`), per-scan dwell via
-`prepare`/`configure`, move-progress `WatchableAsyncStatus`, derived/energy/piezo
-motors, real hardware (`simulation=False` with `getStatus()` polling).
+Line fly scanning via `getLine()` — `PystxmLineFlyer` (a hand-rolled
+`Flyable`/`Collectable`, not ophyd-async's `StandardFlyer`) with per-row dwell
+configured through `prepare()`, driven by the `stxm_fly_raster` plan and
+surfaced in Lightfall's plan registry via `StxmFlyRasterPlanPlugin`.
+
+## Out of scope
+
+Per-scan dwell via the ophyd-async `configure` protocol (we use `prepare()`
+instead), move-progress `WatchableAsyncStatus`, derived/energy/piezo motors,
+real hardware (`simulation=False` with `getStatus()` polling).

@@ -51,8 +51,12 @@ def test_adapter_delegates_to_pure_plan():
 def test_flyer_device_class_matches_backend_registration():
     # The plugin's DeviceFilter(device_class=...) MUST byte-match the device_class
     # the backend registers, or the UI device-picker silently shows no flyer.
+    from importlib.resources import files
+
+    from lightfall.devices.backends.happi import HappiBackend
     from lightfall_pystxmcontrol.plan_plugin import FLYER_DEVICE_CLASS
-    from lightfall_pystxmcontrol.backend import PystxmStxmBackend
-    backend = PystxmStxmBackend()
-    assert backend.connect() is True
+
+    db = str(files("lightfall_pystxmcontrol").joinpath("pystxm_happi.json"))
+    backend = HappiBackend(path=db, instantiate="background")
+    backend.connect()
     assert backend.get_device_by_name("STXMLineFlyer").device_class == FLYER_DEVICE_CLASS
