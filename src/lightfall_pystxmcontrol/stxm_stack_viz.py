@@ -34,6 +34,7 @@ class StxmStackVisualization(ImageRenderMixin, BaseVisualization):
         self._stxm: dict | None = None
         self._frame: int = 0
         self._follow_live: bool = True
+        self._latest_frame: int = 0
 
     # ---------------- cube state ----------------
 
@@ -55,10 +56,60 @@ class StxmStackVisualization(ImageRenderMixin, BaseVisualization):
         self._show_frame()
 
     def _show_frame(self) -> None:
+        self._ensure_controls()
         if self._cube is None:
             return
         self._image = self._cube[self._frame]
         self._render()
+        self._sync_controls()
+
+    # ---------------- controls ----------------
+
+    def _ensure_controls(self) -> None:
+        """Lazily build slider + follow checkbox below the image view."""
+        if getattr(self, "_slider", None) is not None:
+            return
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QSlider
+
+        self._ensure_view()  # ImageRenderMixin: builds the ImageView + layout
+        self._slider = QSlider(Qt.Horizontal, self)
+        self._slider.setMinimum(0)
+        self._slider.setMaximum(0)
+        self._slider.sliderMoved.connect(self._on_slider_moved)
+        self._follow_box = QCheckBox("Follow", self)
+        self._follow_box.setChecked(self._follow_live)
+        self._follow_box.toggled.connect(self._on_follow_toggled)
+        self._energy_label = QLabel("", self)
+        row = QHBoxLayout()
+        row.addWidget(self._slider, 1)
+        row.addWidget(self._energy_label, 0)
+        row.addWidget(self._follow_box, 0)
+        self.layout().addLayout(row)
+        self._sync_controls()
+
+    def _on_slider_moved(self, value: int) -> None:
+        """USER slider interaction suspends live-follow (spec §3.4)."""
+        self._follow_live = False
+        if getattr(self, "_follow_box", None) is not None:
+            self._follow_box.setChecked(False)
+        self.set_frame_index(value)
+
+    def _on_follow_toggled(self, checked: bool) -> None:
+        self._follow_live = bool(checked)
+        if checked:
+            self.set_frame_index(self._latest_frame)
+
+    def _sync_controls(self) -> None:
+        if getattr(self, "_slider", None) is None or self._cube is None:
+            return
+        self._slider.setMaximum(self._cube.shape[0] - 1)
+        self._slider.blockSignals(True)
+        self._slider.setValue(self._frame)
+        self._slider.blockSignals(False)
+        if self._stxm:
+            e = self._stxm["energies"][self._frame]
+            self._energy_label.setText(f"{e:g} eV [{self._frame + 1}/{self._cube.shape[0]}]")
 
     # ---------------- streaming ----------------
 
@@ -79,6 +130,7 @@ class StxmStackVisualization(ImageRenderMixin, BaseVisualization):
             return
         iE, iy = contract.decode_line_index(row, ny)
         self._cube[iE, iy] = line
+        self._latest_frame = iE
         if self._follow_live:
             self._frame = iE
         if iE == self._frame:

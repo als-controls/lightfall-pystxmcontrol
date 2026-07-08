@@ -25,5 +25,10 @@ manifest = PluginManifest(
             "stxm_map",
             "lightfall_pystxmcontrol.stxm_map_viz:StxmMapVizPlugin",
         ),
+        PluginEntry(
+            "visualization",
+            "stxm_stack",
+            "lightfall_pystxmcontrol.stxm_stack_viz:StxmStackVizPlugin",
+        ),
     ],
 )

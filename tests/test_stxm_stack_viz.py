@@ -141,3 +141,42 @@ class TestRefresh:
         v.set_run(_FakeRun(plan_name="stxm_energy_stack", stxm=None))
         v.set_stream("primary")  # must not raise
         assert v.current_cube() is None
+
+
+class TestSliderAndFollow:
+    def test_slider_updates_frame_and_suspends_follow(self):
+        v = _viz(_FakeRun(rows=np.ones((6, 4))))
+        v._ensure_controls()
+        v._slider.setValue(1)
+        v._on_slider_moved(1)  # simulate user drag (sliderMoved is user-only)
+        assert v.current_frame_index() == 1
+        assert v.follow_live is False
+
+    def test_follow_checkbox_reenables_and_jumps_to_latest(self):
+        v = _viz(_FakeRun(rows=np.empty((0, 4))))
+        v._ensure_controls()
+        v._on_slider_moved(0)
+        assert v.follow_live is False
+        v.on_stream_update(_make_array_data(row=4, line=np.ones(4)))  # iE=1 acquired
+        assert v.current_frame_index() == 0  # follow suspended — stays put
+        v._follow_box.setChecked(True)
+        assert v.follow_live is True
+        assert v.current_frame_index() == 1  # jumped to latest acquired energy
+
+    def test_slider_range_matches_nE(self):
+        v = _viz(_FakeRun(rows=np.ones((6, 4))))
+        v._ensure_controls()
+        assert (v._slider.minimum(), v._slider.maximum()) == (0, 1)
+
+
+class TestStackVizPlugin:
+    def test_plugin_identity(self):
+        from lightfall_pystxmcontrol.stxm_stack_viz import StxmStackVizPlugin
+        p = StxmStackVizPlugin()
+        assert p.name == "stxm_stack"
+        assert StxmStackVizPlugin.type_name == "visualization"
+
+    def test_manifest_has_entry(self):
+        from lightfall_pystxmcontrol.manifest import manifest
+        entries = {(e.type_name, e.name) for e in manifest.plugins}
+        assert ("visualization", "stxm_stack") in entries
