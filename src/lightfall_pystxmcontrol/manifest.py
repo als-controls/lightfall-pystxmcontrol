@@ -30,5 +30,11 @@ manifest = PluginManifest(
             "stxm_stack",
             "lightfall_pystxmcontrol.stxm_stack_viz:StxmStackVizPlugin",
         ),
+        PluginEntry(
+            "panel",
+            "stxm_scan",
+            "lightfall_pystxmcontrol.scan_panel:StxmScanPanelPlugin",
+            preload=True,
+        ),
     ],
 )

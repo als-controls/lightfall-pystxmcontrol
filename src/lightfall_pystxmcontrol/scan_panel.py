@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QPushButton, QSpinBox, QWidget,
 )
 
+from lightfall.plugins.panel_plugin import PanelPlugin
 from lightfall.ui.panels.base import BasePanel, PanelMetadata
 
 from .energy_ranges import EnergyRangesEditor
@@ -141,7 +142,107 @@ class STXMScanPanel(BasePanel):
         self._setup_submit_ui()  # Task 13 (no-op placeholder until then)
 
     def _setup_submit_ui(self) -> None:
-        """Extended in Task 13 with device pickers, validation, and Launch."""
+        from PySide6.QtWidgets import QComboBox
+
+        # Device pickers (Phase A: flyer selection IS the channel selection,
+        # spec §3.3; its name lands in the contract as data_field).
+        self._flyer_name = "STXMLineFlyer"
+        self._energy_name = "energy"
+        self._y_name = "SampleY"
+
+        dev_row = QHBoxLayout()
+        self._device_combos: dict[str, Any] = {}
+        for label, attr, names in (
+            ("Detector:", "_flyer_name", ["STXMLineFlyer"]),
+            ("Energy:", "_energy_name", ["energy"]),
+            ("Y axis:", "_y_name", ["SampleY", "SampleX"]),
+        ):
+            dev_row.addWidget(QLabel(label, self))
+            combo = QComboBox(self)
+            combo.addItems(names)
+            combo.currentTextChanged.connect(
+                lambda text, a=attr: setattr(self, a, text))
+            self._device_combos[attr] = combo
+            dev_row.addWidget(combo)
+
+        self._errors_label = QLabel("", self)
+        self._errors_label.setWordWrap(True)
+        self._launch_btn = QPushButton("Launch energy stack", self)
+        self._launch_btn.clicked.connect(self.launch)
+
+        self._layout.addLayout(dev_row)
+        self._layout.addWidget(self._errors_label)
+        self._layout.addWidget(self._launch_btn)
+
+    # ---------------- validation + submit ----------------
+
+    def _axis_limits(self, device_name: str) -> tuple[float, float] | None:
+        """Soft limits from the happi entry kwargs (spec §3.3: PystxmAxis
+        exposes no limits on the ophyd device itself)."""
+        info = self._catalog().get_device_by_name(device_name)
+        try:
+            cfg = info.metadata["kwargs"]["axis_config"]
+            return float(cfg["minValue"]), float(cfg["maxValue"])
+        except Exception:
+            return None
+
+    def validate_scan(self) -> list[str]:
+        errors: list[str] = []
+        try:
+            energies = self._energy_editor.energies()
+        except ValueError as e:
+            return [str(e)]
+        if not energies:
+            errors.append("no energies defined")
+        region = self.region_kwargs()
+        if self._nx.value() < 1 or self._ny.value() < 1:
+            errors.append("nx and ny must be >= 1")
+        lim = self._axis_limits(self._energy_name)
+        if lim and energies:
+            lo, hi = lim
+            bad = [e for e in energies if not (lo <= e <= hi)]
+            if bad:
+                errors.append(f"energies outside soft limits [{lo}, {hi}]: {bad[:3]}")
+        lim = self._axis_limits(self._y_name)
+        if lim:
+            lo, hi = lim
+            if not (lo <= region["y_start"] and region["y_stop"] <= hi):
+                errors.append(f"region Y outside soft limits [{lo}, {hi}]")
+        # X limits live on the flyer's embedded fast axis config
+        info = self._catalog().get_device_by_name(self._flyer_name)
+        try:
+            cfg = info.metadata["kwargs"]["x_axis_config"]
+            lo, hi = float(cfg["minValue"]), float(cfg["maxValue"])
+            if not (lo <= region["x_start"] and region["x_stop"] <= hi):
+                errors.append(f"region X outside soft limits [{lo}, {hi}]")
+        except Exception:
+            pass
+        return errors
+
+    def launch(self) -> str | None:
+        """Validate, build the plan generator, submit. Returns procedure id."""
+        errors = self.validate_scan()
+        self._errors_label.setText("; ".join(errors))
+        if errors:
+            return None
+        catalog = self._catalog()
+        flyer = catalog.get_ophyd_device(self._flyer_name)
+        energy = catalog.get_ophyd_device(self._energy_name)
+        y = catalog.get_ophyd_device(self._y_name)
+        if not all((flyer, energy, y)):
+            self._errors_label.setText("devices not connected")
+            return None
+        from .plans import stxm_energy_stack
+        plan = stxm_energy_stack(
+            flyer, energy, y,
+            energies=self._energy_editor.energies(),
+            ny=self._ny.value(), nx=self._nx.value(),
+            dwell_ms=self._dwell.value(),
+            **self.region_kwargs(),
+        )
+        pid = self._engine().submit(plan, name="stxm_energy_stack")
+        self._status_label.setText(f"submitted: {pid}")
+        return pid
 
     # ---------------- context image ----------------
 
@@ -205,3 +306,14 @@ class STXMScanPanel(BasePanel):
         pos = self._roi.pos()
         size = self._roi.size()
         return region_to_plan_kwargs((pos.x(), pos.y()), (size.x(), size.y()))
+
+
+class StxmScanPanelPlugin(PanelPlugin):
+    """Contributes the STXM scan-definition panel."""
+
+    @property
+    def name(self) -> str:
+        return "stxm_scan"
+
+    def get_panel_class(self) -> type[BasePanel]:
+        return STXMScanPanel

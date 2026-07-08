@@ -93,3 +93,92 @@ class TestRegionRoi:
         p._roi.setSize((2.0, 3.0))
         kw = p.region_kwargs()
         assert kw == {"x_start": -3.0, "x_stop": -1.0, "y_start": -1.0, "y_stop": 2.0}
+
+
+class _FakeDeviceInfo:
+    def __init__(self, name, min_v=-100.0, max_v=100.0):
+        self.name = name
+        self.metadata = {"kwargs": {"axis_config": {"minValue": min_v, "maxValue": max_v}}}
+
+
+class _FakeCatalog:
+    """Duck-type of DeviceCatalog for the pystxm sim device set."""
+    def __init__(self):
+        self._infos = {
+            "SampleY": _FakeDeviceInfo("SampleY"),
+            "energy": _FakeDeviceInfo("energy", 250.0, 2500.0),
+            "STXMLineFlyer": _FakeDeviceInfo("STXMLineFlyer"),
+        }
+        self._ophyd = {k: MagicMock(name=k) for k in self._infos}
+        for k, m in self._ophyd.items():
+            m.name = k
+        # flyer needs the contract attrs the plan reads
+        self._ophyd["STXMLineFlyer"].X_DATA_KEY = "SampleX"
+
+    def get_device_by_name(self, name):
+        return self._infos.get(name)
+
+    def get_ophyd_device(self, name):
+        return self._ophyd.get(name)
+
+
+class TestValidationAndSubmit:
+    def _ready_panel(self, qtbot, engine=None):
+        p = _panel(qtbot, catalog=_FakeCatalog(), engine=engine or MagicMock())
+        p.set_manual_extents(-10.0, 10.0, -5.0, 5.0)
+        p._flyer_name = "STXMLineFlyer"
+        p._energy_name = "energy"
+        p._y_name = "SampleY"
+        p._energy_editor.add_range(500.0, 510.0, 2)
+        return p
+
+    def test_valid_scan_has_no_errors(self, qtbot):
+        p = self._ready_panel(qtbot)
+        assert p.validate_scan() == []
+
+    def test_empty_energies_rejected(self, qtbot):
+        p = self._ready_panel(qtbot)
+        p._energy_editor._table.setRowCount(0)
+        assert any("energ" in e.lower() for e in p.validate_scan())
+
+    def test_energy_outside_soft_limits_rejected(self, qtbot):
+        p = self._ready_panel(qtbot)
+        p._energy_editor.add_range(3000.0, 3000.0, 1)  # > maxValue 2500
+        assert any("limit" in e.lower() for e in p.validate_scan())
+
+    def test_region_outside_y_limits_rejected(self, qtbot):
+        p = self._ready_panel(qtbot)
+        p._roi.setPos((-3.0, -200.0))  # y below SampleY minValue -100
+        p._roi.setSize((2.0, 3.0))
+        assert any("limit" in e.lower() for e in p.validate_scan())
+
+    def test_launch_submits_plan_with_name(self, qtbot):
+        engine = MagicMock()
+        engine.submit.return_value = "proc-1"
+        p = self._ready_panel(qtbot, engine=engine)
+        assert p.launch() == "proc-1"
+        assert engine.submit.call_count == 1
+        _, kwargs = engine.submit.call_args
+        assert kwargs.get("name") == "stxm_energy_stack"
+
+    def test_launch_blocked_when_invalid(self, qtbot):
+        engine = MagicMock()
+        p = self._ready_panel(qtbot, engine=engine)
+        p._energy_editor._table.setRowCount(0)
+        assert p.launch() is None
+        engine.submit.assert_not_called()
+
+
+class TestPanelPlugin:
+    def test_plugin_identity_and_panel_class(self):
+        from lightfall_pystxmcontrol.scan_panel import StxmScanPanelPlugin, STXMScanPanel
+        p = StxmScanPanelPlugin()
+        assert p.name == "stxm_scan"
+        assert p.get_panel_class() is STXMScanPanel
+        assert p.panel_id == "lightfall_pystxmcontrol.panels.stxm_scan"
+
+    def test_manifest_has_preloaded_panel_entry(self):
+        from lightfall_pystxmcontrol.manifest import manifest
+        entry = next(e for e in manifest.plugins if e.type_name == "panel")
+        assert entry.name == "stxm_scan"
+        assert entry.preload is True
