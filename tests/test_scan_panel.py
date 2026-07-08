@@ -96,9 +96,12 @@ class TestRegionRoi:
 
 
 class _FakeDeviceInfo:
-    def __init__(self, name, min_v=-100.0, max_v=100.0):
+    def __init__(self, name, min_v=-100.0, max_v=100.0, extra_kwargs: dict | None = None):
         self.name = name
-        self.metadata = {"kwargs": {"axis_config": {"minValue": min_v, "maxValue": max_v}}}
+        kwargs = {"axis_config": {"minValue": min_v, "maxValue": max_v}}
+        if extra_kwargs:
+            kwargs.update(extra_kwargs)
+        self.metadata = {"kwargs": kwargs}
 
 
 class _FakeCatalog:
@@ -107,7 +110,10 @@ class _FakeCatalog:
         self._infos = {
             "SampleY": _FakeDeviceInfo("SampleY"),
             "energy": _FakeDeviceInfo("energy", 250.0, 2500.0),
-            "STXMLineFlyer": _FakeDeviceInfo("STXMLineFlyer"),
+            "STXMLineFlyer": _FakeDeviceInfo(
+                "STXMLineFlyer",
+                extra_kwargs={"x_axis_config": {"minValue": -100.0, "maxValue": 100.0}},
+            ),
         }
         self._ophyd = {k: MagicMock(name=k) for k in self._infos}
         for k, m in self._ophyd.items():
@@ -149,6 +155,12 @@ class TestValidationAndSubmit:
     def test_region_outside_y_limits_rejected(self, qtbot):
         p = self._ready_panel(qtbot)
         p._roi.setPos((-3.0, -200.0))  # y below SampleY minValue -100
+        p._roi.setSize((2.0, 3.0))
+        assert any("limit" in e.lower() for e in p.validate_scan())
+
+    def test_region_outside_x_limits_rejected(self, qtbot):
+        p = self._ready_panel(qtbot)
+        p._roi.setPos((-200.0, -1.0))  # x below flyer x_axis_config minValue -100
         p._roi.setSize((2.0, 3.0))
         assert any("limit" in e.lower() for e in p.validate_scan())
 
