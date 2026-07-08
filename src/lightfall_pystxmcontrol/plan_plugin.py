@@ -15,7 +15,7 @@ from lightfall.plugins.plan_plugin import PlanPlugin
 from lightfall.ui.annotations import DeviceFilter, Range, Unit
 
 from .flyer import PystxmLineFlyer
-from .plans import stxm_fly_raster
+from .plans import stxm_fly_raster, stxm_energy_stack
 
 # Derived from the flyer class to guarantee byte-identity with what HappiBackend
 # stores: Python dotted import path (module.ClassName), matching the device_class
@@ -63,3 +63,45 @@ class StxmFlyRasterPlanPlugin(PlanPlugin):
 
     def get_plan_function(self) -> Callable[..., Generator[Any, Any, Any]]:
         return _stxm_fly_raster_ui
+
+
+def _stxm_energy_stack_ui(
+    flyer: Annotated[Any, DeviceFilter(device_class=FLYER_DEVICE_CLASS)],
+    energy_axis: Annotated[Any, DeviceFilter(category="motor", name_pattern="energy")],
+    y_axis: Annotated[Any, DeviceFilter(category="motor")],
+    *,
+    energies: list[float],
+    y_start: Annotated[float, Unit("um")] = -5.0,
+    y_stop: Annotated[float, Unit("um")] = 5.0,
+    ny: Annotated[int, Range(1, 10000)] = 6,
+    x_start: Annotated[float, Unit("um")] = -5.0,
+    x_stop: Annotated[float, Unit("um")] = 5.0,
+    nx: Annotated[int, Range(1, 10000)] = 10,
+    dwell_ms: Annotated[float, Unit("ms")] = 1.0,
+) -> Generator[Any, Any, Any]:
+    """Energy-stack STXM: an (ny, nx) fly image at each energy (eV list).
+
+    UNITS: positions um; dwell_ms is per-point count time in MILLISECONDS.
+    ``energies`` is the flat eV setpoint list (the scan panel expands ranges).
+
+    UI-facing adapter: delegates to the pure ``plans.stxm_energy_stack``.
+    """
+    return (yield from stxm_energy_stack(
+        flyer, energy_axis, y_axis, energies=energies,
+        y_start=y_start, y_stop=y_stop, ny=ny,
+        x_start=x_start, x_stop=x_stop, nx=nx, dwell_ms=dwell_ms, md=None))
+
+
+class StxmEnergyStackPlanPlugin(PlanPlugin):
+    """Contributes the STXM energy-stack plan to Lightfall's plan registry."""
+
+    @property
+    def name(self) -> str:
+        return "stxm_energy_stack"
+
+    @property
+    def category(self) -> str:
+        return "stxm"
+
+    def get_plan_function(self) -> Callable[..., Generator[Any, Any, Any]]:
+        return _stxm_energy_stack_ui

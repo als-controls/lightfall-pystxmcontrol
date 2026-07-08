@@ -16,6 +16,11 @@ manifest = PluginManifest(
             "lightfall_pystxmcontrol.plan_plugin:StxmFlyRasterPlanPlugin",
         ),
         PluginEntry(
+            "plan",
+            "stxm_energy_stack",
+            "lightfall_pystxmcontrol.plan_plugin:StxmEnergyStackPlanPlugin",
+        ),
+        PluginEntry(
             "visualization",
             "stxm_map",
             "lightfall_pystxmcontrol.stxm_map_viz:StxmMapVizPlugin",
