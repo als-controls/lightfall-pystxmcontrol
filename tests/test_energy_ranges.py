@@ -59,3 +59,39 @@ class TestEditorWidget:
         ed._table.selectRow(0)
         ed.remove_selected()
         assert ed.ranges() == [(700.0, 710.0, 2)]
+
+    def test_cells_are_not_editable(self, qtbot):
+        from PySide6.QtCore import Qt
+        from lightfall_pystxmcontrol.energy_ranges import EnergyRangesEditor
+        _qapp()
+        ed = EnergyRangesEditor()
+        qtbot.addWidget(ed)
+        ed.add_range(500.0, 510.0, 2)
+        for c in range(ed._table.columnCount()):
+            item = ed._table.item(0, c)
+            assert not (item.flags() & Qt.ItemIsEditable)
+
+    def test_remove_selected_multi_row(self, qtbot):
+        from lightfall_pystxmcontrol.energy_ranges import EnergyRangesEditor
+        _qapp()
+        ed = EnergyRangesEditor()
+        qtbot.addWidget(ed)
+        ed.add_range(500.0, 510.0, 2)
+        ed.add_range(700.0, 710.0, 2)
+        ed.add_range(800.0, 810.0, 2)
+        ed._table.selectAll()
+        ed.remove_selected()
+        assert ed.ranges() == []
+
+    def test_remove_selected_no_selection_is_noop(self, qtbot):
+        from lightfall_pystxmcontrol.energy_ranges import EnergyRangesEditor
+        _qapp()
+        ed = EnergyRangesEditor()
+        qtbot.addWidget(ed)
+        ed.add_range(500.0, 510.0, 2)
+        ed._table.clearSelection()
+        emissions = []
+        ed.changed.connect(lambda: emissions.append(None))
+        ed.remove_selected()
+        assert emissions == []
+        assert ed.ranges() == [(500.0, 510.0, 2)]

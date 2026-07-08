@@ -1761,7 +1761,7 @@ FUNCTION of pystxmcontrol's energyDef.py on Lightfall idioms — no code import.
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDoubleSpinBox, QHBoxLayout, QPushButton, QSpinBox, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
@@ -1813,7 +1813,14 @@ class EnergyRangesEditor(QWidget):
         r = self._table.rowCount()
         self._table.insertRow(r)
         for c, v in enumerate((start, stop, int(n))):
-            self._table.setItem(r, c, QTableWidgetItem(str(v)))
+            item = QTableWidgetItem(str(v))
+            # Cells are read-only (spec §3.3 defines the surface as add/remove
+            # rows only): inline editing would bypass the `changed` signal and
+            # feed unguarded float()/int() parsing in ranges(). Rows are
+            # edited by remove + re-add; inline editing (with validation and
+            # changed wiring) is deliberately out of scope for this slice.
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            self._table.setItem(r, c, item)
         self.changed.emit()
 
     def remove_selected(self) -> None:
