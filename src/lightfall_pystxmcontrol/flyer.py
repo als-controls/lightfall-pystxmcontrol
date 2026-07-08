@@ -18,7 +18,13 @@ class PystxmLineFlyer(Flyable, Collectable):
     collect() emits one event with the count array, derived X positions, and Y.
     """
 
-    def __init__(self, daq_config: dict, x_axis_config: dict, name: str = "Counter1"):
+    # Event data keys for the derived fast-axis positions and the slow-axis
+    # setpoint. These are the literal keys emitted in collect(); the plan
+    # records X_DATA_KEY as the contract's x_motor (spec §4.1 provenance).
+    X_DATA_KEY = "SampleX"
+    Y_DATA_KEY = "SampleY"
+
+    def __init__(self, daq_config: dict, x_axis_config: dict, name: str = "STXMLineFlyer"):
         self._daq_config = daq_config
         self._x_axis_config = x_axis_config
         self._name = name
@@ -60,8 +66,8 @@ class PystxmLineFlyer(Flyable, Collectable):
     def describe_collect(self) -> dict:
         nx = self._row["nx"]
         return {"primary": {
-            "SampleX": {"source": "sim:linspace", "dtype": "array", "shape": [nx]},
-            "SampleY": {"source": "sim:y", "dtype": "number", "shape": []},
+            self.X_DATA_KEY: {"source": "sim:linspace", "dtype": "array", "shape": [nx]},
+            self.Y_DATA_KEY: {"source": "sim:y", "dtype": "number", "shape": []},
             self._name: {"source": "sim:getLine", "dtype": "array", "shape": [nx]},
         }}
 
@@ -71,6 +77,6 @@ class PystxmLineFlyer(Flyable, Collectable):
         ts = _time.time()
         yield {
             "time": ts,
-            "data": {"SampleX": x, "SampleY": r["y"], self._name: self._counts},
-            "timestamps": {"SampleX": ts, "SampleY": ts, self._name: ts},
+            "data": {self.X_DATA_KEY: x, self.Y_DATA_KEY: r["y"], self._name: self._counts},
+            "timestamps": {self.X_DATA_KEY: ts, self.Y_DATA_KEY: ts, self._name: ts},
         }
