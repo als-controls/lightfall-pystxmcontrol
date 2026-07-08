@@ -1,4 +1,13 @@
 """Lightfall PlanPlugin exposing the simulated STXM fly raster in the UI."""
+# PEP 563: keep annotations as source strings so parameter metadata like
+# ``Unit("ms")`` survives introspection. Without this, inspect.signature returns
+# the evaluated ``Annotated[...]`` object whose ``__name__`` is just "Annotated",
+# so PlanInfo.type_name (registry.py) drops the unit and MCP plan discovery
+# (list_plans) shows a bare "Annotated" — hiding that dwell is milliseconds.
+# Built-in lightfall plans already rely on this; the UI resolves string
+# annotations via resolve_string_annotation()/extract_annotated_metadata().
+from __future__ import annotations
+
 from collections.abc import Callable, Generator
 from typing import Annotated, Any
 
@@ -27,6 +36,11 @@ def _stxm_fly_raster_ui(
     dwell: Annotated[float, Unit("ms")] = 1.0,
 ) -> Generator[Any, Any, Any]:
     """Step the slow axis (Y) and fly the fast axis (X) per row, one event per line.
+
+    UNITS: y_start/y_stop/x_start/x_stop are in micrometers (um); dwell is the
+    per-point count time in MILLISECONDS (ms), NOT seconds. e.g. dwell=1000 is
+    1 s/point; the sim count rate is ~1e7 counts/s. A small dwell (1-10 ms)
+    completes almost instantly.
 
     UI-facing adapter: delegates to the pure ``plans.stxm_fly_raster`` so the
     bare-RunEngine plan stays decoupled from Lightfall's UI annotations.

@@ -9,6 +9,11 @@ def stxm_fly_raster(flyer, y_axis, *, y_start, y_stop, ny,
     """Step the slow axis (Y), fly the fast axis (X) per row.
 
     Emits one event per line (the flyer's collect): SampleX[nx], SampleY, Counter1[nx].
+
+    Units: y_start/y_stop/x_start/x_stop in micrometers (um); ``dwell`` is the
+    per-point count time in MILLISECONDS (ms), not seconds — it is passed
+    unchanged to keysight53230A.config(), whose sim getLine() sleeps
+    ``dwell/1000 * nx`` seconds. So dwell=1000 -> 1 s/point.
     """
     _md = {"plan_name": "stxm_fly_raster", "shape": [ny, nx],
            "motors": [y_axis.name], "detectors": [flyer.name]}
