@@ -136,6 +136,19 @@ Line fly scanning via `getLine()` — `PystxmLineFlyer` (a hand-rolled
 configured through `prepare()`, driven by the `stxm_fly_raster` plan and
 surfaced in Lightfall's plan registry via `StxmFlyRasterPlanPlugin`.
 
+## Phase A: energy stacks (option-5 vertical slice)
+
+- `stxm_energy_stack` plan: an (ny, nx) fly image per energy; one run, one
+  `primary` stream, `nE*ny` line events. Contract: `contract.py` +
+  `docs/superpowers/specs/2026-07-07-stxm-lightfall-option5-design.md` §4.
+- STXM Scan panel (`stxm_scan`): region-on-image (through Tiled, motor
+  coords), energy ranges, device pickers, validated submit.
+- STXM Energy Stack viz (`stxm_stack`): live per-line cube fill with energy
+  slider + live-follow.
+- Golden fixture: `tests/fixtures/golden_energy_stack_run.json`
+  (regenerate: `scripts/make_golden_fixture.py`).
+- Smoke: `scripts/smoke_energy_stack.py`.
+
 ## Out of scope
 
 Per-scan dwell via the ophyd-async `configure` protocol (we use `prepare()`
