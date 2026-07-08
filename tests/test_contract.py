@@ -1,6 +1,5 @@
 """Task 4: the normative Tiled run-layout contract (spec §4)."""
 import numpy as np
-import pytest
 
 from lightfall_pystxmcontrol import contract
 
@@ -91,3 +90,41 @@ def test_validate_flags_success_with_missing_lines():
 
 def test_validate_partial_run_is_valid_when_not_success():
     assert contract.validate_run_documents(_docs(n_lines=4, exit_status="fail")) == []
+
+
+def test_validate_missing_stop_doc_is_valid_partial_run():
+    # Spec §4.3: a missing stop doc is a valid partial run, same as a
+    # non-success stop doc, as long as line count is within capacity.
+    docs = [d for d in _docs(n_lines=4) if d[0] != "stop"]
+    assert contract.validate_run_documents(docs) == []
+
+
+def test_validate_missing_stop_doc_still_flags_over_capacity():
+    docs = [d for d in _docs(n_lines=7) if d[0] != "stop"]  # nE*ny == 6
+    errors = contract.validate_run_documents(docs)
+    assert any("capacity" in e for e in errors)
+
+
+def test_validate_flags_malformed_shape_wrong_length():
+    docs = _docs()
+    docs[0][1]["stxm"]["shape"] = [2, 3]
+    errors = contract.validate_run_documents(docs)
+    assert any("shape" in e for e in errors)
+
+
+def test_validate_flags_malformed_shape_wrong_type():
+    docs = _docs()
+    docs[0][1]["stxm"]["shape"] = "2x3x4"
+    errors = contract.validate_run_documents(docs)
+    assert any("shape" in e for e in errors)
+
+
+def test_validate_flags_event_missing_data_key():
+    docs = [
+        ("start", {**_md(nE=1, ny=2, nx=4), "uid": "u1"}),
+        ("event_page", {"seq_num": [1]}),  # no "data" key at all
+        ("event_page", {"seq_num": [2], "data": {"STXMLineFlyer": [list(np.ones(4))]}}),
+        ("stop", {"exit_status": "fail", "num_events": {"primary": 1}}),
+    ]
+    errors = contract.validate_run_documents(docs)
+    assert any("data" in e for e in errors)

@@ -310,7 +310,6 @@ git commit -m "feat: flyer data-key constants; default name STXMLineFlyer (no Co
 # tests/test_contract.py
 """Task 4: the normative Tiled run-layout contract (spec §4)."""
 import numpy as np
-import pytest
 
 from lightfall_pystxmcontrol import contract
 
@@ -401,6 +400,44 @@ def test_validate_flags_success_with_missing_lines():
 
 def test_validate_partial_run_is_valid_when_not_success():
     assert contract.validate_run_documents(_docs(n_lines=4, exit_status="fail")) == []
+
+
+def test_validate_missing_stop_doc_is_valid_partial_run():
+    # Spec §4.3: a missing stop doc is a valid partial run, same as a
+    # non-success stop doc, as long as line count is within capacity.
+    docs = [d for d in _docs(n_lines=4) if d[0] != "stop"]
+    assert contract.validate_run_documents(docs) == []
+
+
+def test_validate_missing_stop_doc_still_flags_over_capacity():
+    docs = [d for d in _docs(n_lines=7) if d[0] != "stop"]  # nE*ny == 6
+    errors = contract.validate_run_documents(docs)
+    assert any("capacity" in e for e in errors)
+
+
+def test_validate_flags_malformed_shape_wrong_length():
+    docs = _docs()
+    docs[0][1]["stxm"]["shape"] = [2, 3]
+    errors = contract.validate_run_documents(docs)
+    assert any("shape" in e for e in errors)
+
+
+def test_validate_flags_malformed_shape_wrong_type():
+    docs = _docs()
+    docs[0][1]["stxm"]["shape"] = "2x3x4"
+    errors = contract.validate_run_documents(docs)
+    assert any("shape" in e for e in errors)
+
+
+def test_validate_flags_event_missing_data_key():
+    docs = [
+        ("start", {**_md(nE=1, ny=2, nx=4), "uid": "u1"}),
+        ("event_page", {"seq_num": [1]}),  # no "data" key at all
+        ("event_page", {"seq_num": [2], "data": {"STXMLineFlyer": [list(np.ones(4))]}}),
+        ("stop", {"exit_status": "fail", "num_events": {"primary": 1}}),
+    ]
+    errors = contract.validate_run_documents(docs)
+    assert any("data" in e for e in errors)
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -496,7 +533,12 @@ def validate_run_documents(docs: list[tuple[str, dict]]) -> list[str]:
         return errors
     if s["contract_version"] != CONTRACT_VERSION:
         errors.append(f"contract_version {s['contract_version']} != {CONTRACT_VERSION}")
-    nE, ny, nx = s["shape"]
+    shape = s["shape"]
+    if (not isinstance(shape, (list, tuple)) or len(shape) != 3
+            or not all(isinstance(v, int) for v in shape)):
+        errors.append(f"stxm block 'shape' must be a 3-int sequence, got {shape!r}")
+        return errors
+    nE, ny, nx = shape
     if len(s["energies"]) != nE:
         errors.append(f"len(energies)={len(s['energies'])} != nE={nE}")
     if start.get("plan_name") != PLAN_NAME_ENERGY_STACK:
@@ -507,8 +549,12 @@ def validate_run_documents(docs: list[tuple[str, dict]]) -> list[str]:
     for name, doc in docs[1:]:
         if name not in ("event", "event_page"):
             continue
+        data = doc.get("data")
+        if not isinstance(data, dict):
+            errors.append(f"{name} doc missing 'data'")
+            continue
         seqs = doc["seq_num"] if isinstance(doc.get("seq_num"), list) else [doc.get("seq_num")]
-        rows = doc["data"].get(field)
+        rows = data.get(field)
         if rows is None:
             errors.append(f"event data missing field {field!r}")
             continue
@@ -520,15 +566,17 @@ def validate_run_documents(docs: list[tuple[str, dict]]) -> list[str]:
                 errors.append(f"seq_num {sn} out of order (expected {seq})")
             if len(line) != nx:
                 errors.append(f"line {sn} length {len(line)} != nx={nx} (atomic lines, §4.2)")
+    # A missing stop doc is a valid partial run (spec §4.3): treat it like a
+    # non-success partial. The success-line-count check only applies when a
+    # stop doc with exit_status == "success" is present; the capacity check
+    # always applies.
     stops = [d for n, d in docs if n == "stop"]
-    if not stops:
-        errors.append("no stop document")
-    else:
+    if stops:
         status = stops[0].get("exit_status")
         if status == "success" and seq != nE * ny:
             errors.append(f"success run has {seq} lines, expected {nE * ny}")
-        if seq > nE * ny:
-            errors.append(f"{seq} lines exceeds shape capacity {nE * ny}")
+    if seq > nE * ny:
+        errors.append(f"{seq} lines exceeds shape capacity {nE * ny}")
     return errors
 ```
 
@@ -538,7 +586,7 @@ def validate_run_documents(docs: list[tuple[str, dict]]) -> list[str]:
 QT_QPA_PLATFORM=offscreen C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python -m pytest tests/test_contract.py -v
 ```
 
-Expected: PASS (all 9).
+Expected: PASS (all 14).
 
 - [ ] **Step 5: Commit**
 

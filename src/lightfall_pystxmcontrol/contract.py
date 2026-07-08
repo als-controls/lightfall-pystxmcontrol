@@ -79,7 +79,12 @@ def validate_run_documents(docs: list[tuple[str, dict]]) -> list[str]:
         return errors
     if s["contract_version"] != CONTRACT_VERSION:
         errors.append(f"contract_version {s['contract_version']} != {CONTRACT_VERSION}")
-    nE, ny, nx = s["shape"]
+    shape = s["shape"]
+    if (not isinstance(shape, (list, tuple)) or len(shape) != 3
+            or not all(isinstance(v, int) for v in shape)):
+        errors.append(f"stxm block 'shape' must be a 3-int sequence, got {shape!r}")
+        return errors
+    nE, ny, nx = shape
     if len(s["energies"]) != nE:
         errors.append(f"len(energies)={len(s['energies'])} != nE={nE}")
     if start.get("plan_name") != PLAN_NAME_ENERGY_STACK:
@@ -90,8 +95,12 @@ def validate_run_documents(docs: list[tuple[str, dict]]) -> list[str]:
     for name, doc in docs[1:]:
         if name not in ("event", "event_page"):
             continue
+        data = doc.get("data")
+        if not isinstance(data, dict):
+            errors.append(f"{name} doc missing 'data'")
+            continue
         seqs = doc["seq_num"] if isinstance(doc.get("seq_num"), list) else [doc.get("seq_num")]
-        rows = doc["data"].get(field)
+        rows = data.get(field)
         if rows is None:
             errors.append(f"event data missing field {field!r}")
             continue
@@ -103,13 +112,15 @@ def validate_run_documents(docs: list[tuple[str, dict]]) -> list[str]:
                 errors.append(f"seq_num {sn} out of order (expected {seq})")
             if len(line) != nx:
                 errors.append(f"line {sn} length {len(line)} != nx={nx} (atomic lines, §4.2)")
+    # A missing stop doc is a valid partial run (spec §4.3): treat it like a
+    # non-success partial. The success-line-count check only applies when a
+    # stop doc with exit_status == "success" is present; the capacity check
+    # always applies.
     stops = [d for n, d in docs if n == "stop"]
-    if not stops:
-        errors.append("no stop document")
-    else:
+    if stops:
         status = stops[0].get("exit_status")
         if status == "success" and seq != nE * ny:
             errors.append(f"success run has {seq} lines, expected {nE * ny}")
-        if seq > nE * ny:
-            errors.append(f"{seq} lines exceeds shape capacity {nE * ny}")
+    if seq > nE * ny:
+        errors.append(f"{seq} lines exceeds shape capacity {nE * ny}")
     return errors
