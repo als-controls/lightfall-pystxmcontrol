@@ -1,0 +1,398 @@
+[
+ [
+  "start",
+  {
+   "uid": "2b158f7d-e9cf-48c5-af2d-45551e6fa8b7",
+   "time": 1783485946.8248973,
+   "versions": {
+    "ophyd": "1.11.1",
+    "ophyd_async": "0.19.2",
+    "bluesky": "1.14.6"
+   },
+   "scan_id": 1,
+   "plan_type": "generator",
+   "plan_name": "stxm_energy_stack",
+   "motors": [
+    "energy",
+    "SampleY"
+   ],
+   "detectors": [
+    "STXMLineFlyer"
+   ],
+   "stxm": {
+    "contract_version": 1,
+    "shape": [
+     2,
+     3,
+     4
+    ],
+    "energies": [
+     500.0,
+     510.0
+    ],
+    "dwell_ms": 1.0,
+    "x_extent": [
+     -4.0,
+     4.0
+    ],
+    "y_extent": [
+     -2.0,
+     2.0
+    ],
+    "x_motor": "SampleX",
+    "y_motor": "SampleY",
+    "energy_motor": "energy",
+    "data_field": "STXMLineFlyer"
+   }
+  }
+ ],
+ [
+  "descriptor",
+  {
+   "configuration": {
+    "STXMLineFlyer": {
+     "data": {},
+     "timestamps": {},
+     "data_keys": {}
+    }
+   },
+   "data_keys": {
+    "SampleX": {
+     "source": "sim:linspace",
+     "dtype": "array",
+     "shape": [
+      4
+     ],
+     "object_name": "STXMLineFlyer"
+    },
+    "SampleY": {
+     "source": "sim:y",
+     "dtype": "number",
+     "shape": [],
+     "object_name": "STXMLineFlyer"
+    },
+    "STXMLineFlyer": {
+     "source": "sim:getLine",
+     "dtype": "array",
+     "shape": [
+      4
+     ],
+     "object_name": "STXMLineFlyer"
+    }
+   },
+   "name": "primary",
+   "object_keys": {
+    "STXMLineFlyer": [
+     "SampleX",
+     "SampleY",
+     "STXMLineFlyer"
+    ]
+   },
+   "run_start": "2b158f7d-e9cf-48c5-af2d-45551e6fa8b7",
+   "time": 1783485946.8494225,
+   "uid": "cc8c66af-0806-4837-9453-fd8094e0e33a",
+   "hints": {}
+  }
+ ],
+ [
+  "event_page",
+  {
+   "time": [
+    1783485946.8503776
+   ],
+   "uid": [
+    "a3d58e46-a58f-4e6b-8d0c-721bc9eb7688"
+   ],
+   "seq_num": [
+    1
+   ],
+   "descriptor": "cc8c66af-0806-4837-9453-fd8094e0e33a",
+   "filled": {},
+   "data": {
+    "SampleX": [
+     [
+      -4.0,
+      -1.3333333333333335,
+      1.333333333333333,
+      4.0
+     ]
+    ],
+    "SampleY": [
+     -2.0
+    ],
+    "STXMLineFlyer": [
+     [
+      10065.0,
+      9826.0,
+      10031.0,
+      10010.0
+     ]
+    ]
+   },
+   "timestamps": {
+    "SampleX": [
+     1783485946.850357
+    ],
+    "SampleY": [
+     1783485946.850357
+    ],
+    "STXMLineFlyer": [
+     1783485946.850357
+    ]
+   }
+  }
+ ],
+ [
+  "event_page",
+  {
+   "time": [
+    1783485946.8660297
+   ],
+   "uid": [
+    "beeec8e0-657f-4345-98bb-9ef951e82507"
+   ],
+   "seq_num": [
+    2
+   ],
+   "descriptor": "cc8c66af-0806-4837-9453-fd8094e0e33a",
+   "filled": {},
+   "data": {
+    "SampleX": [
+     [
+      -4.0,
+      -1.3333333333333335,
+      1.333333333333333,
+      4.0
+     ]
+    ],
+    "SampleY": [
+     0.0
+    ],
+    "STXMLineFlyer": [
+     [
+      9916.0,
+      10119.0,
+      9973.0,
+      9934.0
+     ]
+    ]
+   },
+   "timestamps": {
+    "SampleX": [
+     1783485946.8659878
+    ],
+    "SampleY": [
+     1783485946.8659878
+    ],
+    "STXMLineFlyer": [
+     1783485946.8659878
+    ]
+   }
+  }
+ ],
+ [
+  "event_page",
+  {
+   "time": [
+    1783485946.882335
+   ],
+   "uid": [
+    "a0ecbb40-2d8c-4e9d-8c36-21079a45d760"
+   ],
+   "seq_num": [
+    3
+   ],
+   "descriptor": "cc8c66af-0806-4837-9453-fd8094e0e33a",
+   "filled": {},
+   "data": {
+    "SampleX": [
+     [
+      -4.0,
+      -1.3333333333333335,
+      1.333333333333333,
+      4.0
+     ]
+    ],
+    "SampleY": [
+     2.0
+    ],
+    "STXMLineFlyer": [
+     [
+      9952.0,
+      9964.0,
+      10003.0,
+      10071.0
+     ]
+    ]
+   },
+   "timestamps": {
+    "SampleX": [
+     1783485946.882281
+    ],
+    "SampleY": [
+     1783485946.882281
+    ],
+    "STXMLineFlyer": [
+     1783485946.882281
+    ]
+   }
+  }
+ ],
+ [
+  "event_page",
+  {
+   "time": [
+    1783485946.897905
+   ],
+   "uid": [
+    "706af838-43c1-4f86-aa93-19d81ec213e3"
+   ],
+   "seq_num": [
+    4
+   ],
+   "descriptor": "cc8c66af-0806-4837-9453-fd8094e0e33a",
+   "filled": {},
+   "data": {
+    "SampleX": [
+     [
+      -4.0,
+      -1.3333333333333335,
+      1.333333333333333,
+      4.0
+     ]
+    ],
+    "SampleY": [
+     -2.0
+    ],
+    "STXMLineFlyer": [
+     [
+      10014.0,
+      9859.0,
+      9998.0,
+      9844.0
+     ]
+    ]
+   },
+   "timestamps": {
+    "SampleX": [
+     1783485946.8978698
+    ],
+    "SampleY": [
+     1783485946.8978698
+    ],
+    "STXMLineFlyer": [
+     1783485946.8978698
+    ]
+   }
+  }
+ ],
+ [
+  "event_page",
+  {
+   "time": [
+    1783485946.9136474
+   ],
+   "uid": [
+    "258bf492-1873-4733-b915-4da100c94b46"
+   ],
+   "seq_num": [
+    5
+   ],
+   "descriptor": "cc8c66af-0806-4837-9453-fd8094e0e33a",
+   "filled": {},
+   "data": {
+    "SampleX": [
+     [
+      -4.0,
+      -1.3333333333333335,
+      1.333333333333333,
+      4.0
+     ]
+    ],
+    "SampleY": [
+     0.0
+    ],
+    "STXMLineFlyer": [
+     [
+      9897.0,
+      10012.0,
+      10107.0,
+      10042.0
+     ]
+    ]
+   },
+   "timestamps": {
+    "SampleX": [
+     1783485946.9136066
+    ],
+    "SampleY": [
+     1783485946.9136066
+    ],
+    "STXMLineFlyer": [
+     1783485946.9136066
+    ]
+   }
+  }
+ ],
+ [
+  "event_page",
+  {
+   "time": [
+    1783485946.9291306
+   ],
+   "uid": [
+    "8afb38d0-9041-471c-9d2e-a50f20d6bedf"
+   ],
+   "seq_num": [
+    6
+   ],
+   "descriptor": "cc8c66af-0806-4837-9453-fd8094e0e33a",
+   "filled": {},
+   "data": {
+    "SampleX": [
+     [
+      -4.0,
+      -1.3333333333333335,
+      1.333333333333333,
+      4.0
+     ]
+    ],
+    "SampleY": [
+     2.0
+    ],
+    "STXMLineFlyer": [
+     [
+      10010.0,
+      10053.0,
+      9996.0,
+      10103.0
+     ]
+    ]
+   },
+   "timestamps": {
+    "SampleX": [
+     1783485946.9290788
+    ],
+    "SampleY": [
+     1783485946.9290788
+    ],
+    "STXMLineFlyer": [
+     1783485946.9290788
+    ]
+   }
+  }
+ ],
+ [
+  "stop",
+  {
+   "uid": "65485bcd-6073-4e43-bee9-2ccee8d4a21d",
+   "time": 1783485946.9311075,
+   "run_start": "2b158f7d-e9cf-48c5-af2d-45551e6fa8b7",
+   "exit_status": "success",
+   "reason": "",
+   "num_events": {
+    "primary": 6
+   }
+  }
+ ]
+]
