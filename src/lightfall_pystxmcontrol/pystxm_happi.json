@@ -3,7 +3,7 @@
         "_id": "Counter1",
         "active": true,
         "args": [],
-        "creation": "Fri Jun 26 11:47:33 2026",
+        "creation": "Tue Jul  7 18:57:21 2026",
         "device_class": "lightfall_pystxmcontrol.devices.PystxmCounter",
         "documentation": null,
         "kwargs": {
@@ -19,7 +19,7 @@
             "dwell": 1.0,
             "name": "{{name}}"
         },
-        "last_edit": "Fri Jun 26 11:47:33 2026",
+        "last_edit": "Tue Jul  7 18:57:21 2026",
         "name": "Counter1",
         "prefix": "",
         "type": "OphydItem"
@@ -28,7 +28,7 @@
         "_id": "STXMLineFlyer",
         "active": true,
         "args": [],
-        "creation": "Fri Jun 26 11:47:33 2026",
+        "creation": "Tue Jul  7 18:57:21 2026",
         "device_class": "lightfall_pystxmcontrol.flyer.PystxmLineFlyer",
         "documentation": null,
         "kwargs": {
@@ -50,7 +50,7 @@
                 "units": 1.0
             }
         },
-        "last_edit": "Fri Jun 26 11:47:33 2026",
+        "last_edit": "Tue Jul  7 18:57:21 2026",
         "name": "STXMLineFlyer",
         "prefix": "",
         "type": "OphydItem"
@@ -59,7 +59,7 @@
         "_id": "SampleX",
         "active": true,
         "args": [],
-        "creation": "Fri Jun 26 11:47:33 2026",
+        "creation": "Tue Jul  7 18:57:21 2026",
         "device_class": "lightfall_pystxmcontrol.devices.PystxmAxis",
         "documentation": null,
         "kwargs": {
@@ -72,7 +72,7 @@
             },
             "name": "{{name}}"
         },
-        "last_edit": "Fri Jun 26 11:47:33 2026",
+        "last_edit": "Tue Jul  7 18:57:21 2026",
         "name": "SampleX",
         "prefix": "",
         "type": "OphydItem"
@@ -81,7 +81,7 @@
         "_id": "SampleY",
         "active": true,
         "args": [],
-        "creation": "Fri Jun 26 11:47:33 2026",
+        "creation": "Tue Jul  7 18:57:21 2026",
         "device_class": "lightfall_pystxmcontrol.devices.PystxmAxis",
         "documentation": null,
         "kwargs": {
@@ -94,8 +94,30 @@
             },
             "name": "{{name}}"
         },
-        "last_edit": "Fri Jun 26 11:47:33 2026",
+        "last_edit": "Tue Jul  7 18:57:21 2026",
         "name": "SampleY",
+        "prefix": "",
+        "type": "OphydItem"
+    },
+    "energy": {
+        "_id": "energy",
+        "active": true,
+        "args": [],
+        "creation": "Tue Jul  7 18:57:21 2026",
+        "device_class": "lightfall_pystxmcontrol.devices.PystxmAxis",
+        "documentation": null,
+        "kwargs": {
+            "axis_config": {
+                "axis": "X",
+                "maxValue": 2500.0,
+                "minValue": 250.0,
+                "offset": 0.0,
+                "units": 1.0
+            },
+            "name": "{{name}}"
+        },
+        "last_edit": "Tue Jul  7 18:57:21 2026",
+        "name": "energy",
         "prefix": "",
         "type": "OphydItem"
     }

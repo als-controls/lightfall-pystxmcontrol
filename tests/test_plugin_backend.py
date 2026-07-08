@@ -17,4 +17,4 @@ def test_create_backend_points_at_packaged_db():
     assert isinstance(backend, HappiBackend)
     backend.connect()
     names = {d.name for d in backend.list_devices(active_only=False)}
-    assert names == {"SampleX", "SampleY", "Counter1", "STXMLineFlyer"}
+    assert names == {"SampleX", "SampleY", "Counter1", "STXMLineFlyer", "energy"}

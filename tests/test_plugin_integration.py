@@ -16,7 +16,7 @@ def test_plugin_creates_backend():
     assert plugin.name == "pystxmcontrol"
     be = plugin.create_backend()
     be.connect()
-    assert len(be.list_devices()) == 4
+    assert len(be.list_devices()) == 5
 
 
 def test_grid_scan_via_backend_devices():

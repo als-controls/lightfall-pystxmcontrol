@@ -5,6 +5,11 @@ DEFAULT_AXES = {
                 "minValue": -100.0, "maxValue": 100.0},
     "SampleY": {"axis": "Y", "units": 1.0, "offset": 0.0,
                 "minValue": -100.0, "maxValue": 100.0},
+    # Sim energy axis (spec §3.1): an energy-shaped Movable, NOT the real
+    # derivedEnergy zone-plate physics (Phase B). eV-scale soft limits are
+    # load-bearing: xpsMotor.moveTo raises SoftwareLimitError even in sim.
+    "energy": {"axis": "X", "units": 1.0, "offset": 0.0,
+               "minValue": 250.0, "maxValue": 2500.0},
 }
 
 DEFAULT_COUNTER = {
