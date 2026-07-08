@@ -1940,7 +1940,8 @@ class TestContextImage:
         p = _panel(qtbot, client=client)
         p.load_run("u1")
         assert p.current_extents() == (-4.0, 4.0, -2.0, 2.0)
-        r = p._image_item.boundingRect()  # placed via setRect in motor coords
+        # boundingRect() is local/pixel space in pyqtgraph; mapRectToView reflects the setRect placement in motor coords.
+        r = p._image_item.mapRectToView(p._image_item.boundingRect())
         assert (r.left(), r.top(), r.width(), r.height()) == (-4.0, -2.0, 8.0, 4.0)
 
     def test_load_run_missing_uid_sets_error_not_raise(self, qtbot):
@@ -1958,7 +1959,8 @@ class TestContextImage:
         client["u1"] = _FakeEntry(np.ones((3, 5)), x_extent=(4.0, -4.0))
         p = _panel(qtbot, client=client)
         p.load_run("u1")  # spec §4.1: descending extents are legal
-        r = p._image_item.boundingRect()
+        # boundingRect() is local/pixel space in pyqtgraph; mapRectToView reflects the setRect placement in motor coords.
+        r = p._image_item.mapRectToView(p._image_item.boundingRect())
         assert (r.left(), r.width()) == (-4.0, 8.0)
 
 
