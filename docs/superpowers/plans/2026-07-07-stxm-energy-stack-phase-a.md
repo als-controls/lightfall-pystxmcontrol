@@ -644,9 +644,6 @@ class _PoisonFlyer(PystxmLineFlyer):
         super().__init__(*a, **k)
         self._rows_done = 0
 
-    async def _complete_impl(self):  # helper for clarity
-        pass
-
     def complete(self):
         if self._rows_done == self.FAIL_AT_ROW:
             raise RuntimeError("detector died mid-row")
