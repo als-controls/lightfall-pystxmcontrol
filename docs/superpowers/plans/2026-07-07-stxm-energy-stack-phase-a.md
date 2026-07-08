@@ -1195,7 +1195,6 @@ Key facts the implementer must know:
 # tests/test_stxm_stack_viz.py
 """Tasks 9-10: StxmStackVisualization — allocation, blit, refresh, NaN, slider."""
 import numpy as np
-import pytest
 
 
 def _qapp():

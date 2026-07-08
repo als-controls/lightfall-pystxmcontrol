@@ -1,6 +1,7 @@
 """Tasks 9-10: StxmStackVisualization — allocation, blit, refresh, NaN, slider."""
+import warnings
+
 import numpy as np
-import pytest
 
 
 def _qapp():
@@ -116,6 +117,11 @@ class TestAllocationAndBlit:
         v.refresh = lambda: calls.append(1)
         v.on_stream_update(_make_array_data(row=0, line=np.ones(4), offset_none=True))
         assert calls
+
+    def test_all_nan_frame_renders_without_warnings(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            _viz(_FakeRun(rows=np.empty((0, 4))))
 
 
 class TestRefresh:

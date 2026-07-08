@@ -42,6 +42,11 @@ class ImageRenderMixin:
         """
         if self._image is None:
             return
+        # An all-NaN frame has nothing to display, and pyqtgraph's level
+        # computation would emit All-NaN RuntimeWarnings; unfilled stack
+        # frames hit this before their first blit.
+        if not np.isfinite(self._image).any():
+            return
         self._ensure_view()
         self._applying_auto_levels = True
         try:
