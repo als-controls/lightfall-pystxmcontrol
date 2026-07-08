@@ -8,7 +8,7 @@ a growing (k, nx) 2-D array; the cube view of it is contract.cube_from_rows.
 
 Displays one energy frame at a time. Live-follow: the displayed frame tracks
 the energy being acquired; user slider interaction suspends follow until the
-Follow toggle re-enables it (Task 10 adds the widgets).
+Follow toggle re-enables it (the slider + Follow widgets live in this viz).
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ class StxmStackVisualization(ImageRenderMixin, BaseVisualization):
         return self._follow_live
 
     def set_frame_index(self, i: int) -> None:
-        """Programmatic frame selection (slider calls this via Task 10)."""
+        """Programmatic frame selection (the frame slider calls this)."""
         if self._cube is None:
             return
         self._frame = int(np.clip(i, 0, self._cube.shape[0] - 1))

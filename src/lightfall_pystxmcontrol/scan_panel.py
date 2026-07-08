@@ -139,7 +139,7 @@ class STXMScanPanel(BasePanel):
         self._layout.addWidget(self._plot)
         self._layout.addLayout(pix_row)
         self._layout.addWidget(self._energy_editor)
-        self._setup_submit_ui()  # Task 13 (no-op placeholder until then)
+        self._setup_submit_ui()  # builds device pickers, error label, Launch button
 
     def _setup_submit_ui(self) -> None:
         from PySide6.QtWidgets import QComboBox
