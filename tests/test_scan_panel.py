@@ -5,6 +5,17 @@ import pytest
 from unittest.mock import MagicMock
 
 
+@pytest.fixture(autouse=True)
+def _reset_sort_key_cache():
+    # _recent_runs caches the proven sort key process-wide; a real deployment
+    # only talks to one backend, but these tests exercise several, so clear the
+    # cache between cases to keep them isolated.
+    import lightfall.plugins.agents.engine_tools as et
+    et._verified_sort_key = None
+    yield
+    et._verified_sort_key = None
+
+
 def _qapp():
     from PySide6.QtWidgets import QApplication
     return QApplication.instance() or QApplication([])
@@ -163,6 +174,24 @@ class TestLoadLastRun:
         p.load_last_run()
         assert p.current_extents() == (-4.0, 4.0, -2.0, 2.0)  # u_new via ``time``
         assert "u_new"[:8] in p._status_label.text()
+
+    def test_proven_sort_key_is_cached_and_short_circuits(self, qtbot):
+        # After one proven detection the key is cached process-wide, and later
+        # calls use the fast path without re-verifying (no default-head probe).
+        import lightfall.plugins.agents.engine_tools as et
+        client = _FakeCatalogClient(["u_old", "u_new"], sort_field="time")
+        client["u_old"] = _FakeEntry(np.zeros((3, 5)), uid="u_old", time=100.0)
+        client["u_new"] = _FakeEntry(np.ones((3, 5)), uid="u_new", time=200.0)
+        assert et._verified_sort_key is None
+        assert et._recent_runs(client, 1)[0].metadata["start"]["uid"] == "u_new"
+        assert et._verified_sort_key == "time"  # proven + cached
+
+        calls = []
+        orig_sort = client.sort
+        client.sort = lambda key: (calls.append(key), orig_sort(key))[1]
+        assert et._recent_runs(client, 1)[0].metadata["start"]["uid"] == "u_new"
+        # Fast path: only the cached key is tried, not the full candidate sweep.
+        assert calls == [("time", -1)]
 
     def test_falls_back_when_server_cannot_sort(self, qtbot):
         # sort() raises -> bounded tail of the default (ascending) order = newest.
