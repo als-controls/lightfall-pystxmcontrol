@@ -163,6 +163,10 @@ class TestLoadLastRun:
                 raise AssertionError("load_last_run must not walk .items()")
             def keys(self):
                 raise AssertionError("load_last_run must not walk .keys()")
+            def __iter__(self):
+                # list(client)/for-in returns only the first page -> "last" is
+                # silently WRONG; this is the trap the helper exists to avoid.
+                raise AssertionError("load_last_run must not iterate the catalog")
         client = _GreedyGuard(["u_new"])
         client["u_new"] = _FakeEntry(np.ones((3, 5)), uid="u_new")
         p = _panel(qtbot, client=client)
