@@ -21,11 +21,14 @@ class _FakeNode:
 class _FakeEntry:
     """Duck-type of a Tiled BlueskyRun entry for a completed fly-raster run."""
     def __init__(self, arr, x_extent=(-4.0, 4.0), y_extent=(-2.0, 2.0),
-                 plan="stxm_fly_raster", detectors=("STXMLineFlyer",)):
-        self.metadata = {"start": {
+                 plan="stxm_fly_raster", detectors=("STXMLineFlyer",), uid=None):
+        start = {
             "plan_name": plan, "detectors": list(detectors),
             "x_extent": list(x_extent), "y_extent": list(y_extent),
-        }}
+        }
+        if uid is not None:
+            start["uid"] = uid
+        self.metadata = {"start": start}
         self._arr = arr
 
     def __getitem__(self, key):
@@ -36,6 +39,38 @@ class _FakeEntry:
 
 class _FakeTiledClient(dict):
     pass
+
+
+class _SortedView:
+    """Result of client.sort(...): its values_indexer supports [:n] slicing."""
+    def __init__(self, entries_newest_first):
+        self.values_indexer = list(entries_newest_first)
+
+
+class _FakeCatalogClient(dict):
+    """Tiled-catalog duck-type keyed by uid, with a time order.
+
+    ``ordered_uids`` is time-ASCENDING (oldest first), mirroring Tiled's
+    default order. ``sort(("time", -1))`` yields newest-first; the bounded
+    fallback reads the tail of ``values_indexer`` (the default order).
+    ``sort_raises=True`` simulates a server that can't sort on time.
+    """
+    def __init__(self, ordered_uids, *, sort_raises=False):
+        super().__init__()
+        self._ordered = list(ordered_uids)
+        self._sort_raises = sort_raises
+
+    def sort(self, key):
+        if self._sort_raises:
+            raise RuntimeError("server cannot sort on time")
+        return _SortedView([self[u] for u in reversed(self._ordered)])
+
+    @property
+    def values_indexer(self):
+        return [self[u] for u in self._ordered]
+
+    def __len__(self):
+        return len(self._ordered)
 
 
 def _panel(qtbot, client=None, catalog=None, engine=None):
@@ -83,6 +118,56 @@ class TestContextImage:
         # boundingRect() is local/pixel space in pyqtgraph; mapRectToView reflects the setRect placement in motor coords.
         r = p._image_item.mapRectToView(p._image_item.boundingRect())
         assert (r.left(), r.width()) == (-4.0, 8.0)
+
+
+class TestLoadLastRun:
+    def test_loads_most_recent_run(self, qtbot):
+        # Time-ascending: u_old then u_new. "Load last run" must pick u_new.
+        client = _FakeCatalogClient(["u_old", "u_new"])
+        client["u_old"] = _FakeEntry(np.zeros((3, 5)), x_extent=(-1.0, 1.0),
+                                     y_extent=(-1.0, 1.0), uid="u_old")
+        client["u_new"] = _FakeEntry(np.ones((3, 5)), x_extent=(-4.0, 4.0),
+                                     y_extent=(-2.0, 2.0), uid="u_new")
+        p = _panel(qtbot, client=client)
+        p.load_last_run()
+        assert p.current_extents() == (-4.0, 4.0, -2.0, 2.0)  # u_new's extents
+        assert "u_new"[:8] in p._status_label.text()
+
+    def test_falls_back_when_server_cannot_sort(self, qtbot):
+        # sort() raises -> bounded tail of the default (ascending) order = newest.
+        client = _FakeCatalogClient(["u_old", "u_new"], sort_raises=True)
+        client["u_old"] = _FakeEntry(np.zeros((3, 5)), x_extent=(-1.0, 1.0),
+                                     y_extent=(-1.0, 1.0), uid="u_old")
+        client["u_new"] = _FakeEntry(np.ones((3, 5)), x_extent=(-4.0, 4.0),
+                                     y_extent=(-2.0, 2.0), uid="u_new")
+        p = _panel(qtbot, client=client)
+        p.load_last_run()
+        assert p.current_extents() == (-4.0, 4.0, -2.0, 2.0)  # still u_new
+
+    def test_no_runs_sets_status_not_raise(self, qtbot):
+        p = _panel(qtbot, client=_FakeCatalogClient([]))
+        p.load_last_run()  # empty catalog must not raise
+        assert "no run" in p._status_label.text().lower()
+
+    def test_disconnected_sets_status_not_raise(self, qtbot):
+        p = _panel(qtbot)
+        p._tiled_client = lambda: None  # simulate Tiled disconnected
+        p.load_last_run()
+        assert "not connected" in p._status_label.text().lower()
+
+    def test_never_iterates_catalog_greedily(self, qtbot):
+        # Guard the N+1 trap: load_last_run must not call list()/items()/keys()
+        # walks. Our fake raises if those greedy paths are hit.
+        class _GreedyGuard(_FakeCatalogClient):
+            def items(self):
+                raise AssertionError("load_last_run must not walk .items()")
+            def keys(self):
+                raise AssertionError("load_last_run must not walk .keys()")
+        client = _GreedyGuard(["u_new"])
+        client["u_new"] = _FakeEntry(np.ones((3, 5)), uid="u_new")
+        p = _panel(qtbot, client=client)
+        p.load_last_run()  # must succeed via sort().values_indexer only
+        assert p.current_extents() is not None
 
 
 class TestRegionRoi:

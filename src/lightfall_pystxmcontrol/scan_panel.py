@@ -89,10 +89,13 @@ class STXMScanPanel(BasePanel):
         self._uid_edit.setPlaceholderText("prior run uid")
         load_btn = QPushButton("Load run", self)
         load_btn.clicked.connect(lambda: self.load_run(self._uid_edit.text().strip()))
+        last_btn = QPushButton("Load last run", self)
+        last_btn.clicked.connect(self.load_last_run)
         self._status_label = QLabel("", self)
         top = QHBoxLayout()
         top.addWidget(self._uid_edit, 1)
         top.addWidget(load_btn, 0)
+        top.addWidget(last_btn, 0)
 
         # Manual extents (used when no prior run is loaded)
         self._ext_boxes = []
@@ -281,6 +284,50 @@ class STXMScanPanel(BasePanel):
             return
         self._show_image(arr, tuple(x_extent), tuple(y_extent))
         self._status_label.setText(f"loaded {uid[:8]}… shape={arr.shape}")
+
+    def _latest_run_uid(self, client: Any) -> str | None:
+        """uid of the most-recent run via a single bounded request.
+
+        Mirrors lightfall.plugins.agents.engine_tools._recent_runs: sort by
+        ``time`` descending server-side and take the head; if the server can't
+        sort on time, fall back to the tail of the default (time-ascending)
+        order. NEVER iterate the catalog (``list(client)``/``client.items()``)
+        — greedy and wrong on large catalogs (see that helper's docstring).
+        """
+        entry = None
+        try:
+            head = list(client.sort(("time", -1)).values_indexer[:1])
+            entry = head[0] if head else None
+        except Exception:
+            try:
+                n = len(client)
+                if n:
+                    entry = list(client.values_indexer[max(0, n - 1):n])[-1]
+            except Exception:
+                entry = None
+        if entry is None:
+            return None
+        try:
+            return entry.metadata["start"]["uid"]
+        except Exception:
+            return None
+
+    def load_last_run(self) -> None:
+        """Load the most-recent run in the Tiled catalog as the context image.
+
+        Convenience over ``load_run``: finds the newest run's uid (bounded
+        request, no catalog walk) and delegates to ``load_run`` so there is a
+        single rendering path. Never raises; failures land in the status label.
+        """
+        client = self._tiled_client()
+        if client is None:
+            self._status_label.setText("Tiled not connected")
+            return
+        uid = self._latest_run_uid(client)
+        if uid is None:
+            self._status_label.setText("no runs found")
+            return
+        self.load_run(uid)
 
     def set_manual_extents(self, x0: float, x1: float, y0: float, y1: float) -> None:
         self._show_image(None, (x0, x1), (y0, y1))
