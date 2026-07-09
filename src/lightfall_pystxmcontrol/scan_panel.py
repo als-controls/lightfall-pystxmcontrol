@@ -289,14 +289,17 @@ class STXMScanPanel(BasePanel):
         """uid of the most-recent run via a single bounded request.
 
         Mirrors lightfall.plugins.agents.engine_tools._recent_runs: sort by
-        ``time`` descending server-side and take the head; if the server can't
-        sort on time, fall back to the tail of the default (time-ascending)
+        ``start.time`` descending server-side and take the head; if the server
+        can't sort, fall back to the tail of the default (time-ascending)
         order. NEVER iterate the catalog (``list(client)``/``client.items()``)
         — greedy and wrong on large catalogs (see that helper's docstring).
         """
         entry = None
         try:
-            head = list(client.sort(("time", -1)).values_indexer[:1])
+            # Sort on the fully-qualified ``start.time`` path; a bare ``time``
+            # key silently no-ops in Tiled (returns oldest-first default order),
+            # which made "Load last run" pick the wrong end of the catalog.
+            head = list(client.sort(("start.time", -1)).values_indexer[:1])
             entry = head[0] if head else None
         except Exception:
             try:

@@ -51,9 +51,12 @@ class _FakeCatalogClient(dict):
     """Tiled-catalog duck-type keyed by uid, with a time order.
 
     ``ordered_uids`` is time-ASCENDING (oldest first), mirroring Tiled's
-    default order. ``sort(("time", -1))`` yields newest-first; the bounded
+    default order. Only the fully-qualified ``("start.time", -1)`` key yields
+    newest-first, matching real Tiled: a bare ``("time", -1)`` references a
+    key that doesn't exist in the searchable namespace, so Tiled silently
+    returns the default (oldest-first) order rather than raising. The bounded
     fallback reads the tail of ``values_indexer`` (the default order).
-    ``sort_raises=True`` simulates a server that can't sort on time.
+    ``sort_raises=True`` simulates a server that can't sort at all.
     """
     def __init__(self, ordered_uids, *, sort_raises=False):
         super().__init__()
@@ -62,8 +65,13 @@ class _FakeCatalogClient(dict):
 
     def sort(self, key):
         if self._sort_raises:
-            raise RuntimeError("server cannot sort on time")
-        return _SortedView([self[u] for u in reversed(self._ordered)])
+            raise RuntimeError("server cannot sort")
+        field, direction = key
+        if field != "start.time":
+            # Unknown key: real Tiled no-ops silently, keeping default order.
+            return _SortedView([self[u] for u in self._ordered])
+        order = reversed(self._ordered) if direction < 0 else self._ordered
+        return _SortedView([self[u] for u in order])
 
     @property
     def values_indexer(self):
