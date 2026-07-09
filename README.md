@@ -149,6 +149,54 @@ surfaced in Lightfall's plan registry via `StxmFlyRasterPlanPlugin`.
   (regenerate: `scripts/make_golden_fixture.py`).
 - Smoke: `scripts/smoke_energy_stack.py`.
 
+## Live analysis (stxm-live)
+
+Option-5's third layer adds an **external headless analysis process** talking
+to Lightfall over NATS, mirroring the `xpcs_live` / Tsuchinoko precedents.
+This repo carries the in-Lightfall half only — a run-binder
+(`stxm_binder.py`), a thin IPC client (`stxm_analysis_client.py`), and a live
+spectrum panel (`stxm_spectrum_panel.py`), all copied in shape from the XPCS
+`binding.py` / `client.py` / panel and registered as a `PanelPlugin`. The
+headless service itself lives in the separate, private
+`github.com/als-controls/stxm-live` repo, which runs in its own environment
+(it needs `pystxmcontrol` for the run-complete stack reduction) and never
+imports `lightfall_pystxmcontrol` or `lightfall` — it re-implements the
+read-side data contract against the shared design doc instead. `lightfall`
+core itself is unchanged.
+
+### The NATS contract (load-bearing; documented verbatim in both repos)
+
+Namespace `stxm.*`. In-Lightfall clients use `IPCService` (prefixing handled
+by the service); the external raw client prefixes every subject with the
+configured `lightfall_prefix` (default `als.7011.`).
+
+| Subject (suffix) | Direction | Kind | Payload |
+|---|---|---|---|
+| `auth.request` (core, reused) | service→LF | req/reply | req `{app_name:"stxm-live", app_version}` → reply `{status:"approved", tiled_token, tiled_url, session_id}` |
+| `stxm.run.bind` | binder→service | publish | `{run_uid, tiled_url, tiled_api_key, lightfall_prefix, contract_version}` |
+| `stxm.run.stop` | binder→service | publish | `{run_uid}` |
+| `stxm.spectrum.updated` | service→LF | publish | `{run_uid, energies:[float], intensity:[float\|null], energies_done:int, seq:int}` |
+| `stxm.status` | service→LF | publish | `{run_uid, state:"binding"\|"reducing"\|"idle", energies_done:int, total:int}` |
+| `stxm.error` | service→LF | publish | `{run_uid, error:str}` |
+| `stxm.reduction.complete` | service→LF | publish | `{run_uid, tiled_path:str, products:[str]}` |
+| `_stxm.discover` / `stxm.meta.actions` / `stxm.meta.events` | service | req/reply | discovery parity with XPCS (service advertises its own actions/events) |
+
+- `intensity` is aligned index-for-index with `energies` (length nE); entries
+  for not-yet-acquired energies are `null` (JSON) / NaN. `seq` increments per
+  publish so a late subscriber can order updates; `energies_done` is the
+  count of non-null entries.
+- `bind`/`stop` are fire-and-forget PUBLISHES (run-doc handlers must not
+  block on replies) — the XPCS convention.
+- `lightfall_prefix` is threaded in the bind (Tsuchinoko convention) so the
+  external service can build correctly-prefixed reply/event subjects without
+  hardcoding.
+
+**Unprefixed-subject rule**: all `stxm.*` subjects are unprefixed on the bus;
+`lightfall_prefix` is used only for `{prefix}.auth.request` and is carried in
+the bind payload.
+
+Full design: `docs/superpowers/specs/2026-07-09-stxm-live-nats-analysis-design.md`.
+
 ## Out of scope
 
 Per-scan dwell via the ophyd-async `configure` protocol (we use `prepare()`
