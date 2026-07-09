@@ -288,30 +288,21 @@ class STXMScanPanel(BasePanel):
     def _latest_run_uid(self, client: Any) -> str | None:
         """uid of the most-recent run via a single bounded request.
 
-        Mirrors lightfall.plugins.agents.engine_tools._recent_runs: sort by
-        ``start.time`` descending server-side and take the head; if the server
-        can't sort, fall back to the tail of the default (time-ascending)
-        order. NEVER iterate the catalog (``list(client)``/``client.items()``)
-        — greedy and wrong on large catalogs (see that helper's docstring).
+        Delegates to lightfall.plugins.agents.engine_tools._recent_runs so the
+        newest-run selection (backend-portable sort-key detection, no catalog
+        walk) lives in exactly one place. An earlier copy here sorted on a bare
+        ``time`` key, which silently no-ops on modern Tiled and made "Load last
+        run" pick the oldest run.
         """
-        entry = None
         try:
-            # Sort on the fully-qualified ``start.time`` path; a bare ``time``
-            # key silently no-ops in Tiled (returns oldest-first default order),
-            # which made "Load last run" pick the wrong end of the catalog.
-            head = list(client.sort(("start.time", -1)).values_indexer[:1])
-            entry = head[0] if head else None
+            from lightfall.plugins.agents.engine_tools import _recent_runs
+            runs = _recent_runs(client, 1)
         except Exception:
-            try:
-                n = len(client)
-                if n:
-                    entry = list(client.values_indexer[max(0, n - 1):n])[-1]
-            except Exception:
-                entry = None
-        if entry is None:
+            return None
+        if not runs:
             return None
         try:
-            return entry.metadata["start"]["uid"]
+            return runs[0].metadata["start"]["uid"]
         except Exception:
             return None
 

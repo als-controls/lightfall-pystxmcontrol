@@ -21,13 +21,16 @@ class _FakeNode:
 class _FakeEntry:
     """Duck-type of a Tiled BlueskyRun entry for a completed fly-raster run."""
     def __init__(self, arr, x_extent=(-4.0, 4.0), y_extent=(-2.0, 2.0),
-                 plan="stxm_fly_raster", detectors=("STXMLineFlyer",), uid=None):
+                 plan="stxm_fly_raster", detectors=("STXMLineFlyer",), uid=None,
+                 time=None):
         start = {
             "plan_name": plan, "detectors": list(detectors),
             "x_extent": list(x_extent), "y_extent": list(y_extent),
         }
         if uid is not None:
             start["uid"] = uid
+        if time is not None:
+            start["time"] = time
         self.metadata = {"start": start}
         self._arr = arr
 
@@ -51,26 +54,31 @@ class _FakeCatalogClient(dict):
     """Tiled-catalog duck-type keyed by uid, with a time order.
 
     ``ordered_uids`` is time-ASCENDING (oldest first), mirroring Tiled's
-    default order. Only the fully-qualified ``("start.time", -1)`` key yields
-    newest-first, matching real Tiled: a bare ``("time", -1)`` references a
-    key that doesn't exist in the searchable namespace, so Tiled silently
-    returns the default (oldest-first) order rather than raising. The bounded
-    fallback reads the tail of ``values_indexer`` (the default order).
+    default order. ``sort_field`` names the ONE metadata key this backend
+    actually honors -- modern Tiled uses ``"start.time"``; the old CMS
+    mongo/databroker adapter uses a bare ``"time"``. Sorting on any other key
+    is a silent no-op that returns the default (oldest-first) order rather than
+    raising -- exactly the trap that made "Load last run" pick the oldest run.
+    When honored, entries are ordered by their actual start-doc ``time``.
     ``sort_raises=True`` simulates a server that can't sort at all.
     """
-    def __init__(self, ordered_uids, *, sort_raises=False):
+    def __init__(self, ordered_uids, *, sort_raises=False, sort_field="start.time"):
         super().__init__()
         self._ordered = list(ordered_uids)
         self._sort_raises = sort_raises
+        self._sort_field = sort_field
+
+    def _start_time(self, uid):
+        return (self[uid].metadata.get("start", {}) or {}).get("time", 0)
 
     def sort(self, key):
         if self._sort_raises:
             raise RuntimeError("server cannot sort")
         field, direction = key
-        if field != "start.time":
-            # Unknown key: real Tiled no-ops silently, keeping default order.
+        if field != self._sort_field:
+            # Unrecognized key: real Tiled no-ops silently, default order.
             return _SortedView([self[u] for u in self._ordered])
-        order = reversed(self._ordered) if direction < 0 else self._ordered
+        order = sorted(self._ordered, key=self._start_time, reverse=direction < 0)
         return _SortedView([self[u] for u in order])
 
     @property
@@ -133,21 +141,36 @@ class TestLoadLastRun:
         # Time-ascending: u_old then u_new. "Load last run" must pick u_new.
         client = _FakeCatalogClient(["u_old", "u_new"])
         client["u_old"] = _FakeEntry(np.zeros((3, 5)), x_extent=(-1.0, 1.0),
-                                     y_extent=(-1.0, 1.0), uid="u_old")
+                                     y_extent=(-1.0, 1.0), uid="u_old", time=100.0)
         client["u_new"] = _FakeEntry(np.ones((3, 5)), x_extent=(-4.0, 4.0),
-                                     y_extent=(-2.0, 2.0), uid="u_new")
+                                     y_extent=(-2.0, 2.0), uid="u_new", time=200.0)
         p = _panel(qtbot, client=client)
         p.load_last_run()
         assert p.current_extents() == (-4.0, 4.0, -2.0, 2.0)  # u_new's extents
+        assert "u_new"[:8] in p._status_label.text()
+
+    def test_cms_backend_sorts_on_bare_time(self, qtbot):
+        # Old CMS mongo/databroker Tiled honors a bare ``time`` key, not the
+        # modern ``start.time``. The helper must DETECT that ``start.time``
+        # silently no-ops (returns oldest-first) and fall through to ``time``,
+        # still landing on the newest run.
+        client = _FakeCatalogClient(["u_old", "u_new"], sort_field="time")
+        client["u_old"] = _FakeEntry(np.zeros((3, 5)), x_extent=(-1.0, 1.0),
+                                     y_extent=(-1.0, 1.0), uid="u_old", time=100.0)
+        client["u_new"] = _FakeEntry(np.ones((3, 5)), x_extent=(-4.0, 4.0),
+                                     y_extent=(-2.0, 2.0), uid="u_new", time=200.0)
+        p = _panel(qtbot, client=client)
+        p.load_last_run()
+        assert p.current_extents() == (-4.0, 4.0, -2.0, 2.0)  # u_new via ``time``
         assert "u_new"[:8] in p._status_label.text()
 
     def test_falls_back_when_server_cannot_sort(self, qtbot):
         # sort() raises -> bounded tail of the default (ascending) order = newest.
         client = _FakeCatalogClient(["u_old", "u_new"], sort_raises=True)
         client["u_old"] = _FakeEntry(np.zeros((3, 5)), x_extent=(-1.0, 1.0),
-                                     y_extent=(-1.0, 1.0), uid="u_old")
+                                     y_extent=(-1.0, 1.0), uid="u_old", time=100.0)
         client["u_new"] = _FakeEntry(np.ones((3, 5)), x_extent=(-4.0, 4.0),
-                                     y_extent=(-2.0, 2.0), uid="u_new")
+                                     y_extent=(-2.0, 2.0), uid="u_new", time=200.0)
         p = _panel(qtbot, client=client)
         p.load_last_run()
         assert p.current_extents() == (-4.0, 4.0, -2.0, 2.0)  # still u_new
