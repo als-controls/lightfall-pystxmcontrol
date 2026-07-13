@@ -330,6 +330,86 @@ class TestValidationAndSubmit:
         engine.submit.assert_not_called()
 
 
+class _FakeEpicsInfo:
+    """Post-migration happi entry shape: bare EpicsMotor, no axis_config kwargs."""
+    def __init__(self, name):
+        self.name = name
+        self.metadata = {"kwargs": {"name": "{{name}}"}}
+
+
+class _FakeEpicsCatalog:
+    """DeviceCatalog duck-type for the EPICS device set: limits live on the
+    ophyd devices (EpicsMotor .limits), NOT in happi metadata."""
+    def __init__(self, energy_limits=(250.0, 2500.0)):
+        names = ("SampleX", "SampleY", "energy", "STXMLineFlyer")
+        self._infos = {n: _FakeEpicsInfo(n) for n in names}
+        limits = {"SampleX": (-100.0, 100.0), "SampleY": (-100.0, 100.0),
+                  "energy": energy_limits}
+        self._ophyd = {}
+        for n in names:
+            m = MagicMock()
+            m.name = n
+            if n in limits:
+                m.limits = limits[n]
+            self._ophyd[n] = m
+        self._ophyd["STXMLineFlyer"].X_DATA_KEY = "SampleX"
+
+    def get_device_by_name(self, name):
+        return self._infos.get(name)
+
+    def get_ophyd_device(self, name):
+        return self._ophyd.get(name)
+
+
+class TestValidationWithEpicsLimits:
+    """Limits come from the live ophyd device (EpicsMotor .limits), matching
+    the post-migration happi entries which carry no axis_config kwargs."""
+
+    def _ready_panel(self, qtbot, catalog=None):
+        p = _panel(qtbot, catalog=catalog or _FakeEpicsCatalog(), engine=MagicMock())
+        p.set_manual_extents(-10.0, 10.0, -5.0, 5.0)
+        p._flyer_name = "STXMLineFlyer"
+        p._energy_name = "energy"
+        p._y_name = "SampleY"
+        p._energy_editor.add_range(500.0, 510.0, 2)
+        return p
+
+    def test_axis_limits_read_from_live_device(self, qtbot):
+        p = self._ready_panel(qtbot)
+        assert p._axis_limits("energy") == (250.0, 2500.0)
+        assert p._axis_limits("SampleY") == (-100.0, 100.0)
+        assert p._x_axis_limits() == (-100.0, 100.0)  # via flyer X_DATA_KEY
+
+    def test_valid_scan_has_no_errors(self, qtbot):
+        p = self._ready_panel(qtbot)
+        assert p.validate_scan() == []
+
+    def test_energy_outside_limits_rejected(self, qtbot):
+        p = self._ready_panel(qtbot)
+        p._energy_editor.add_range(3000.0, 3000.0, 1)  # > HLM 2500
+        assert any("limit" in e.lower() for e in p.validate_scan())
+
+    def test_region_outside_y_limits_rejected(self, qtbot):
+        p = self._ready_panel(qtbot)
+        p._roi.setPos((-3.0, -200.0))  # y below SampleY LLM -100
+        p._roi.setSize((2.0, 3.0))
+        assert any("limit" in e.lower() for e in p.validate_scan())
+
+    def test_region_outside_x_limits_rejected(self, qtbot):
+        p = self._ready_panel(qtbot)
+        p._roi.setPos((-200.0, -1.0))  # x below SampleX LLM -100 (live device)
+        p._roi.setSize((2.0, 3.0))
+        assert any("limit" in e.lower() for e in p.validate_scan())
+
+    def test_disabled_epics_limits_treated_as_no_limits(self, qtbot):
+        # EpicsMotor convention: limits == (0, 0) means limits disabled; no
+        # legacy metadata either -> _axis_limits None -> validation passes.
+        p = self._ready_panel(qtbot, catalog=_FakeEpicsCatalog(energy_limits=(0.0, 0.0)))
+        p._energy_editor.add_range(3000.0, 3000.0, 1)
+        assert p._axis_limits("energy") is None
+        assert p.validate_scan() == []
+
+
 class TestPanelPlugin:
     def test_plugin_identity_and_panel_class(self):
         from lightfall_pystxmcontrol.scan_panel import StxmScanPanelPlugin, STXMScanPanel
