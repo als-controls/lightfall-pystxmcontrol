@@ -10,3 +10,4 @@ build/
 .pytest_cache/
 _pystxmcontrol_iocs_wt/
 .worktrees/
+_pystxmcontrol_remote_wt/
