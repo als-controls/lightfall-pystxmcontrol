@@ -542,7 +542,9 @@ git add pystxmcontrol/iocs/config.py tests/iocs/test_config.py
 git commit -m "feat(iocs): fleet config model - motor.json/daq.json parsing, grouping, PV naming"
 ```
 
----### Task 3: `MotorRecordGroup` + in-process IOC test harness (`base.py`, `conftest.py`)
+---
+
+### Task 3: `MotorRecordGroup` + in-process IOC test harness (`base.py`, `conftest.py`)
 
 **Files:**
 - Create: `pystxmcontrol/iocs/base.py`
