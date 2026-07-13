@@ -95,6 +95,8 @@ class StxmLineFlyer(Device, Flyable, Collectable):
 
     # -- collection ----------------------------------------------------------
     def describe_collect(self) -> dict:
+        if self._row is None:
+            raise RuntimeError(f"{self.name}: describe_collect() before prepare()")
         nx = self._row["nx"]
         return {"primary": {
             self.X_DATA_KEY: {"source": f"epics:{self.prefix}:POS",

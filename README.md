@@ -108,8 +108,11 @@ PYTHONPATH=src C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python -m
 ```
 The test suite spawns its own fleet; it requires `PYSTXMCONTROL_IOCS_SRC` environment variable
 or the default fork worktree present at `_pystxmcontrol_iocs_wt`. Tests that import `lightfall`
-(`test_backend.py`, `test_backend_flyer.py`, `test_plugin_integration.py`) require Lightfall's
-3.14 venv. The bare-RunEngine fly tests (`test_fly_raster.py`, `test_flyer.py`) run on either venv.
+(`test_plugin_integration.py`) require Lightfall's 3.14 venv. The EPICS-backed fleet/flyer tests
+(`test_epics_fixture.py`, `test_devices_epics.py`, `test_flyer_epics.py`,
+`test_e2e_plans_epics.py`) run on either venv, as do the untouched contract, viz, and panel
+tests (`test_contract.py`, `test_stxm_map_viz.py`, `test_stxm_stack_viz.py`,
+`test_stxm_spectrum_panel.py`, `test_scan_panel.py`, etc.).
 
 **Note:** To regenerate the happi database with real hardware, run `build_pystxm_happi_db.py`
 with `--station 7011` and your actual motor/DAQ JSON configs (follow-up; not yet in this repo).

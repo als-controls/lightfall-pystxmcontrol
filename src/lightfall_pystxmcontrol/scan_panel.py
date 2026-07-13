@@ -25,6 +25,10 @@ from lightfall.ui.panels.base import BasePanel, PanelMetadata
 
 from .energy_ranges import EnergyRangesEditor
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def region_to_plan_kwargs(pos: tuple[float, float], size: tuple[float, float]) -> dict:
     """Map a RectROI (pos, size) in motor coords to plan geometry kwargs.
@@ -201,6 +205,10 @@ class STXMScanPanel(BasePanel):
             cfg = info.metadata["kwargs"]["axis_config"]
             return float(cfg["minValue"]), float(cfg["maxValue"])
         except Exception:
+            logger.debug(
+                "no soft limits available for axis %r (neither live device "
+                "nor legacy axis_config); skipping validation for this axis",
+                device_name)
             return None
 
     def _x_axis_limits(self) -> tuple[float, float] | None:

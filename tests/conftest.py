@@ -56,12 +56,25 @@ def iocs_src() -> Path:
     return src
 
 
+_issued_udp_ports: set[int] = set()
+
+
 def _free_udp_port() -> int:
+    """Find a UDP port free at bind-time and not already handed out this session.
+
+    Binding and releasing only proves the port was free at that instant; a
+    later call in the same fleet spawn loop could re-discover the same port
+    before the first IOC has claimed it (TOCTOU). Track issued ports across
+    calls so sequential spawns never collide with each other.
+    """
     for _ in range(50):
         port = random.randint(40000, 60000)
+        if port in _issued_udp_ports:
+            continue
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             try:
                 s.bind(("127.0.0.1", port))
+                _issued_udp_ports.add(port)
                 return port
             except OSError:
                 continue
@@ -78,6 +91,13 @@ def stxm_fleet(iocs_src, tmp_path_factory):
 
     slice_dir = tmp_path_factory.mktemp("stxm_slices")
     fleet = load_fleet(config.sim_motor_json(), config.sim_daq_json(), station="SIM")
+
+    from lightfall_pystxmcontrol.flyer import _DAQ_KEY
+    assert fleet.daqs[0].key == _DAQ_KEY, (
+        f"fleet daq key {fleet.daqs[0].key!r} != flyer's expected {_DAQ_KEY!r}; "
+        "sim_daq.json was likely renamed/restructured without updating flyer.py "
+        "(fails fast here instead of hanging on a PV connect below)")
+
     plans = plan_fleet(fleet, str(slice_dir))
 
     addr_entries: list[str] = []
