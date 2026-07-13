@@ -6,8 +6,6 @@ Expected RED state: ModuleNotFoundError on PystxmBackendPlugin import.
 
 import importlib.metadata
 
-import bluesky.plans as bp
-
 
 def test_plugin_creates_backend():
     from lightfall_pystxmcontrol.plugin import PystxmBackendPlugin
@@ -19,30 +17,13 @@ def test_plugin_creates_backend():
     assert len(be.list_devices()) == 5
 
 
-def test_grid_scan_via_backend_devices():
-    import asyncio
-
-    from bluesky import RunEngine
-
-    from lightfall_pystxmcontrol.plugin import PystxmBackendPlugin
-
-    be = PystxmBackendPlugin().create_backend()
-    be.connect()
-    # HappiBackend with instantiate="background" defers ophyd construction
-    # until the Qt DeviceConnectionManager fires. In tests without a Qt event
-    # loop, call be.instantiate() explicitly then connect() so _motor/_daq are
-    # initialised before the RunEngine drives the plan.
-    x = be.instantiate(be.get_device_by_name("SampleX"))
-    y = be.instantiate(be.get_device_by_name("SampleY"))
-    det = be.instantiate(be.get_device_by_name("Counter1"))
-    asyncio.run(x.connect())
-    asyncio.run(y.connect())
-    asyncio.run(det.connect())
-
-    docs = []
-    RunEngine()(bp.grid_scan([det], x, -1, 1, 2, y, -1, 1, 2),
-                lambda n, d: docs.append(n))
-    assert docs.count("event") == 4
+# NOTE: test_grid_scan_via_backend_devices was removed here — it called
+# asyncio.run(x.connect()) on backend-instantiated devices, assuming the
+# ophyd-async sim device API (PystxmAxis/PystxmCounter). The post-migration
+# devices are classic ophyd (ophyd.EpicsMotor, StxmCounter) requiring a live
+# EPICS IOC to connect, so this needs the caproto sim fleet fixture, not a
+# bare RunEngine. Equivalent coverage over the real fleet is restored in
+# Task 5's e2e suite.
 
 
 def test_entry_point_registered():

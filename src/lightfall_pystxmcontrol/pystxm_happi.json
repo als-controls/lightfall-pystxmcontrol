@@ -3,122 +3,75 @@
         "_id": "Counter1",
         "active": true,
         "args": [],
-        "creation": "Tue Jul  7 18:57:21 2026",
-        "device_class": "lightfall_pystxmcontrol.devices.PystxmCounter",
+        "creation": "Mon Jul 13 00:16:14 2026",
+        "device_class": "lightfall_pystxmcontrol.devices.StxmCounter",
         "documentation": null,
         "kwargs": {
-            "daq_config": {
-                "address": "sim",
-                "driver": "keysight53230A",
-                "name": "Counter1",
-                "port": 5025,
-                "record": true,
-                "simulation": true,
-                "type": "point"
-            },
-            "dwell": 1.0,
             "name": "{{name}}"
         },
-        "last_edit": "Tue Jul  7 18:57:21 2026",
+        "last_edit": "Mon Jul 13 00:16:14 2026",
         "name": "Counter1",
-        "prefix": "",
+        "prefix": "STXMSIM:DEFAULT",
         "type": "OphydItem"
     },
     "STXMLineFlyer": {
         "_id": "STXMLineFlyer",
         "active": true,
         "args": [],
-        "creation": "Tue Jul  7 18:57:21 2026",
-        "device_class": "lightfall_pystxmcontrol.flyer.PystxmLineFlyer",
+        "creation": "Mon Jul 13 00:16:14 2026",
+        "device_class": "lightfall_pystxmcontrol.flyer.StxmLineFlyer",
         "documentation": null,
         "kwargs": {
-            "daq_config": {
-                "address": "sim",
-                "driver": "keysight53230A",
-                "name": "Counter1",
-                "port": 5025,
-                "record": true,
-                "simulation": true,
-                "type": "point"
-            },
-            "name": "{{name}}",
-            "x_axis_config": {
-                "axis": "X",
-                "maxValue": 100.0,
-                "minValue": -100.0,
-                "offset": 0.0,
-                "units": 1.0
-            }
+            "name": "{{name}}"
         },
-        "last_edit": "Tue Jul  7 18:57:21 2026",
+        "last_edit": "Mon Jul 13 00:16:14 2026",
         "name": "STXMLineFlyer",
-        "prefix": "",
+        "prefix": "STXMSIM:E712:FLY",
         "type": "OphydItem"
     },
     "SampleX": {
         "_id": "SampleX",
         "active": true,
         "args": [],
-        "creation": "Tue Jul  7 18:57:21 2026",
-        "device_class": "lightfall_pystxmcontrol.devices.PystxmAxis",
+        "creation": "Mon Jul 13 00:16:14 2026",
+        "device_class": "ophyd.EpicsMotor",
         "documentation": null,
         "kwargs": {
-            "axis_config": {
-                "axis": "X",
-                "maxValue": 100.0,
-                "minValue": -100.0,
-                "offset": 0.0,
-                "units": 1.0
-            },
             "name": "{{name}}"
         },
-        "last_edit": "Tue Jul  7 18:57:21 2026",
+        "last_edit": "Mon Jul 13 00:16:14 2026",
         "name": "SampleX",
-        "prefix": "",
+        "prefix": "STXMSIM:E712:SampleX",
         "type": "OphydItem"
     },
     "SampleY": {
         "_id": "SampleY",
         "active": true,
         "args": [],
-        "creation": "Tue Jul  7 18:57:21 2026",
-        "device_class": "lightfall_pystxmcontrol.devices.PystxmAxis",
+        "creation": "Mon Jul 13 00:16:14 2026",
+        "device_class": "ophyd.EpicsMotor",
         "documentation": null,
         "kwargs": {
-            "axis_config": {
-                "axis": "Y",
-                "maxValue": 100.0,
-                "minValue": -100.0,
-                "offset": 0.0,
-                "units": 1.0
-            },
             "name": "{{name}}"
         },
-        "last_edit": "Tue Jul  7 18:57:21 2026",
+        "last_edit": "Mon Jul 13 00:16:14 2026",
         "name": "SampleY",
-        "prefix": "",
+        "prefix": "STXMSIM:E712:SampleY",
         "type": "OphydItem"
     },
     "energy": {
         "_id": "energy",
         "active": true,
         "args": [],
-        "creation": "Tue Jul  7 18:57:21 2026",
-        "device_class": "lightfall_pystxmcontrol.devices.PystxmAxis",
+        "creation": "Mon Jul 13 00:16:14 2026",
+        "device_class": "ophyd.EpicsMotor",
         "documentation": null,
         "kwargs": {
-            "axis_config": {
-                "axis": "X",
-                "maxValue": 2500.0,
-                "minValue": 250.0,
-                "offset": 0.0,
-                "units": 1.0
-            },
             "name": "{{name}}"
         },
-        "last_edit": "Tue Jul  7 18:57:21 2026",
+        "last_edit": "Mon Jul 13 00:16:14 2026",
         "name": "energy",
-        "prefix": "",
+        "prefix": "STXMSIM:XPS:energy",
         "type": "OphydItem"
     }
 }
