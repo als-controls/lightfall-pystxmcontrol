@@ -63,6 +63,11 @@ class StxmLineFlyer(Device, Flyable, Collectable):
     # -- per-row protocol ---------------------------------------------------
     def prepare(self, *, y: float, x_start: float, x_stop: float,
                 nx: int, dwell: float) -> None:
+        # Invalidate first: any failure below leaves the flyer un-prepared
+        # (kickoff()/complete() raise) instead of running against stale state.
+        self._row = None
+        self._index0 = None
+        self._go_status = None
         for sig, value in ((self.x_start, float(x_start)),
                            (self.x_stop, float(x_stop)),
                            (self.npoints, int(nx)),

@@ -44,6 +44,19 @@ def test_prepare_rejects_out_of_limit_line(flyer):
     flyer.prepare(y=0.0, x_start=-1.0, x_stop=1.0, nx=4, dwell=1.0)
 
 
+def test_failed_prepare_invalidates_prior_cycle_state(flyer):
+    # successful cycle first
+    flyer.prepare(y=0.0, x_start=-1.0, x_stop=1.0, nx=4, dwell=1.0)
+    flyer.kickoff().wait(timeout=30)
+    flyer.complete().wait(timeout=60)
+    list(flyer.collect())
+    # failed prepare must not leave the previous row's state behind
+    with pytest.raises(RuntimeError, match="(?i)limit"):
+        flyer.prepare(y=0.0, x_start=-5000.0, x_stop=1.0, nx=4, dwell=1.0)
+    with pytest.raises(RuntimeError, match="before prepare"):
+        flyer.kickoff()
+
+
 def test_consecutive_rows_index_advances(flyer):
     for row, y in enumerate((0.0, 1.0)):
         flyer.prepare(y=y, x_start=-2.0, x_stop=2.0, nx=5, dwell=1.0)
