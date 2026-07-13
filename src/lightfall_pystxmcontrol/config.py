@@ -33,6 +33,18 @@ def make_sim_motor(axis_config):
     return m
 
 
+from importlib.resources import files as _files
+
+
+def sim_motor_json() -> str:
+    """Absolute path to the packaged sim fleet motor config."""
+    return str(_files("lightfall_pystxmcontrol") / "sim_motor.json")
+
+
+def sim_daq_json() -> str:
+    return str(_files("lightfall_pystxmcontrol") / "sim_daq.json")
+
+
 def make_sim_counter(daq_config):
     """Wire a pystxmcontrol daq in simulation mode."""
     from pystxmcontrol.drivers.keysight53230A import keysight53230A
