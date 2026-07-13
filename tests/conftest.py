@@ -101,24 +101,33 @@ def stxm_fleet(iocs_src, tmp_path_factory):
         time.sleep(0.5)
 
     addr_list = " ".join(addr_entries)
+    saved_env = {k: os.environ.get(k)
+                 for k in ("EPICS_CA_ADDR_LIST", "EPICS_CA_AUTO_ADDR_LIST")}
     os.environ["EPICS_CA_ADDR_LIST"] = addr_list
     os.environ["EPICS_CA_AUTO_ADDR_LIST"] = "NO"
-    time.sleep(3.0)
-    dead = [p.args for p in procs if p.poll() is not None]
-    assert not dead, f"IOC(s) exited early: {dead}"
+    try:
+        time.sleep(3.0)
+        dead = [p.args for p in procs if p.poll() is not None]
+        assert not dead, f"IOC(s) exited early: {dead}"
 
-    e712_label = next(g.label for g in fleet.controller_groups
-                      if g.controller_cls == "E712Controller")
-    yield SimpleNamespace(
-        addr_list=addr_list,
-        motor_pv=fleet.motor_pv,
-        fly_prefix=f"STXMSIM:{e712_label}:FLY",
-        daq_prefix=fleet.daqs[0].prefix,
-    )
-    for p in procs:
-        if p.poll() is None:
-            p.terminate()
-            try:
-                p.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                p.kill()
+        e712_label = next(g.label for g in fleet.controller_groups
+                          if g.controller_cls == "E712Controller")
+        yield SimpleNamespace(
+            addr_list=addr_list,
+            motor_pv=fleet.motor_pv,
+            fly_prefix=f"STXMSIM:{e712_label}:FLY",
+            daq_prefix=fleet.daqs[0].prefix,
+        )
+    finally:
+        for p in procs:
+            if p.poll() is None:
+                p.terminate()
+                try:
+                    p.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    p.kill()
+        for key, prior in saved_env.items():
+            if prior is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = prior
