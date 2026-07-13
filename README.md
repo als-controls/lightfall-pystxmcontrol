@@ -82,33 +82,40 @@ python -m pip install -e . --no-deps
 > exclusive metadata pins. It is runtime-benign today (gpcam imports/runs on
 > 2.3.5). See `NOTES-environment.md` for the rollback freeze and guidance.
 
+## Simulated STXM (EPICS)
+
+1. Start the sim IOC fleet (spec #2 layer, pystxmcontrol fork):
+   ```bash
+   PYTHONPATH=_pystxmcontrol_iocs_wt python -m pystxmcontrol.iocs.supervisor \
+       --station SIM \
+       --motor-config src/lightfall_pystxmcontrol/sim_motor.json \
+       --daq-config   src/lightfall_pystxmcontrol/sim_daq.json
+   ```
+   The supervisor prints an `EPICS_CA_ADDR_LIST` line (per-IOC ports) and writes
+   it to `<slice_dir>/EPICS_CA_ADDR_LIST.txt` — export it for any client,
+   including Lightfall.
+
+2. Environment: `OPHYD_CONTROL_LAYER=caproto` (set automatically on plugin
+   import), **`netifaces` installed (REQUIRED — optional caproto dep, breaks
+   without it)**, `EPICS_CA_AUTO_ADDR_LIST=NO` plus the addr list above.
+
+3. Start Lightfall; the pystxmcontrol backend connects over CA.
+
 ## Run the tests
 
 ```bash
-.venv/Scripts/python -m pytest          # never bare `pytest`
+PYTHONPATH=src C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python -m pytest tests
 ```
-Tests that import `lightfall` (`test_backend.py`, `test_backend_flyer.py`,
-`test_plugin_integration.py`) require Lightfall's 3.14 venv. The bare-RunEngine
-fly tests (`test_fly_raster.py`, `test_flyer.py`) run on either venv.
+The test suite spawns its own fleet; it requires `PYSTXMCONTROL_IOCS_SRC` environment variable
+or the default fork worktree present at `_pystxmcontrol_iocs_wt`. Tests that import `lightfall`
+(`test_plugin_integration.py`) require Lightfall's 3.14 venv. The EPICS-backed fleet/flyer tests
+(`test_epics_fixture.py`, `test_devices_epics.py`, `test_flyer_epics.py`,
+`test_e2e_plans_epics.py`) run on either venv, as do the untouched contract, viz, and panel
+tests (`test_contract.py`, `test_stxm_map_viz.py`, `test_stxm_stack_viz.py`,
+`test_stxm_spectrum_panel.py`, `test_scan_panel.py`, etc.).
 
-## Smoke scripts
-
-```bash
-# step-mode 2D raster
-.venv/Scripts/python scripts/smoke_raw.py             # raw pystxmcontrol sim path (no ophyd)
-.venv/Scripts/python scripts/smoke_gridscan.py        # 2D raster on a bare RunEngine
-.venv/Scripts/python scripts/smoke_lightfall.py       # 2D raster via Lightfall's BlueskyEngine
-
-# line fly raster
-.venv/Scripts/python scripts/smoke_getline.py         # raw getLine() sim path (no ophyd)
-.venv/Scripts/python scripts/smoke_flyscan_lightfall.py  # fly raster via Lightfall's BlueskyEngine
-.venv/Scripts/python scripts/smoke_flyscan_ui.py      # fly raster via the plan-plugin + device-binding path
-```
-`smoke_lightfall.py` enqueues the plan via `engine(plan)` (the `BlueskyEngine`
-runs its RunEngine on a worker thread) and prints e.g.
-`grid_scan ran via Lightfall BlueskyEngine: 25 points; min=... max=...`.
-`smoke_flyscan_lightfall.py` prints e.g.
-`fly raster ran via Lightfall BlueskyEngine: 6 lines x 10 pts; min=... max=...`.
+**Note:** To regenerate the happi database with real hardware, run `build_pystxm_happi_db.py`
+with `--station 7011` and your actual motor/DAQ JSON configs (follow-up; not yet in this repo).
 
 ## Upstream fork & PR
 

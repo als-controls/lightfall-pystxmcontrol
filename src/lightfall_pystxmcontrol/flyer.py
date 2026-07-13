@@ -1,82 +1,127 @@
-# src/lightfall_pystxmcontrol/flyer.py
+"""EPICS line flyer driving the spec-#2 FLY PVGroup (classic ophyd).
+
+Per row: prepare() writes the line config and ARMs (validated IOC-side);
+kickoff() dispatches the GO put (put-completion = line done); complete()
+returns that put's Status; collect() verifies the INDEX increment (the IOC's
+write-then-increment contract guarantees the waveforms are fresh once INDEX
+moved) and emits ONE event with the same keys/shapes as the pre-EPICS flyer,
+so contract.py, plans, and viz are untouched.
+"""
 import time as _time
 from collections.abc import Iterator
 
 import numpy as np
 from bluesky.protocols import Collectable, Flyable
-from ophyd_async.core import AsyncStatus
 
-from . import config
-from .devices import PystxmAxis
+from . import epics_env
+
+epics_env.ensure_caproto_layer()  # before any ophyd import
+
+from ophyd import Component as Cpt  # noqa: E402
+from ophyd import Device, EpicsSignal, EpicsSignalRO  # noqa: E402
+from ophyd.status import Status  # noqa: E402
+
+_DAQ_KEY = "default"  # sim_daq.json key; FLY data waveform is :DATA:{key}
 
 
-class PystxmLineFlyer(Flyable, Collectable):
-    """bluesky Flyable wrapping a pystxmcontrol daq (sim) for one raster line.
+def _null_status() -> Status:
+    st = Status()
+    st.set_finished()
+    return st
 
-    Per row: kickoff() moves the fast axis (X) to the row start and configures the
-    daq for `nx` counts; complete() awaits getLine() (the row's Poisson counts);
-    collect() emits one event with the count array, derived X positions, and Y.
-    """
 
-    # Event data keys for the derived fast-axis positions and the slow-axis
-    # setpoint. These are the literal keys emitted in collect(); the plan
-    # records X_DATA_KEY as the contract's x_motor (spec §4.1 provenance).
+def _as_text(value) -> str:
+    """Normalize the :ERROR char-waveform-as-string read (may come back as bytes)."""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return str(value)
+
+
+class StxmLineFlyer(Device, Flyable, Collectable):
     X_DATA_KEY = "SampleX"
     Y_DATA_KEY = "SampleY"
 
-    def __init__(self, daq_config: dict, x_axis_config: dict, name: str = "STXMLineFlyer"):
-        self._daq_config = daq_config
-        self._x_axis_config = x_axis_config
-        self._name = name
-        self._daq = None          # built in connect()
-        self._x = None            # PystxmAxis, built in connect()
-        self._row = None          # set by prepare()
-        self._counts = None       # set by complete()
+    x_start = Cpt(EpicsSignal, ":START", kind="config")
+    x_stop = Cpt(EpicsSignal, ":STOP", kind="config")
+    npoints = Cpt(EpicsSignal, ":NPOINTS", kind="config")
+    dwell = Cpt(EpicsSignal, ":DWELL", kind="config")
+    arm = Cpt(EpicsSignal, ":ARM", put_complete=True, kind="omitted")
+    go = Cpt(EpicsSignal, ":GO", put_complete=True, kind="omitted")
+    abort = Cpt(EpicsSignal, ":ABORT", kind="omitted")
+    state = Cpt(EpicsSignalRO, ":STATE", string=True, kind="omitted")
+    error = Cpt(EpicsSignalRO, ":ERROR", string=True, kind="omitted")
+    index = Cpt(EpicsSignalRO, ":INDEX", kind="omitted")
+    pos = Cpt(EpicsSignalRO, ":POS", kind="omitted")
+    data = Cpt(EpicsSignalRO, f":DATA:{_DAQ_KEY}", kind="omitted")
 
-    @property
-    def name(self) -> str:
-        return self._name
+    def __init__(self, prefix, *, name="STXMLineFlyer", **kwargs):
+        super().__init__(prefix, name=name, **kwargs)
+        self._row = None
+        self._index0 = None
+        self._go_status = None
 
-    async def connect(self, mock: bool = False) -> None:
-        if self._daq is None:
-            self._daq = config.make_sim_counter(self._daq_config)
-            self._x = PystxmAxis(self._x_axis_config, name="fast_x")
-            await self._x.connect(mock=mock)
-
+    # -- per-row protocol ---------------------------------------------------
     def prepare(self, *, y: float, x_start: float, x_stop: float,
                 nx: int, dwell: float) -> None:
-        self._row = {"y": y, "x_start": x_start, "x_stop": x_stop,
-                     "nx": nx, "dwell": dwell}
-        self._counts = None
+        # Invalidate first: any failure below leaves the flyer un-prepared
+        # (kickoff()/complete() raise) instead of running against stale state.
+        self._row = None
+        self._index0 = None
+        self._go_status = None
+        for sig, value in ((self.x_start, float(x_start)),
+                           (self.x_stop, float(x_stop)),
+                           (self.npoints, int(nx)),
+                           (self.dwell, float(dwell))):
+            sig.set(value).wait(timeout=10)
+        self.arm.set(1).wait(timeout=30)
+        state = self.state.get()
+        if state != "ARMED":
+            raise RuntimeError(
+                f"{self.name}: ARM failed (STATE={state}): {_as_text(self.error.get())}")
+        self._row = {"y": float(y), "nx": int(nx)}
+        self._index0 = int(self.index.get())
+        self._go_status = None
 
-    @AsyncStatus.wrap
-    async def kickoff(self) -> None:
-        r = self._row
-        await self._x.set(r["x_start"])                         # moveTo off-thread (PystxmAxis.set)
-        self._daq.config(dwell=r["dwell"], count=r["nx"], samples=1)
+    def kickoff(self) -> Status:
+        if self._row is None:
+            raise RuntimeError(f"{self.name}: kickoff() before prepare()")
+        self._go_status = self.go.set(1)  # put-completion == line done
+        return _null_status()
 
-    @AsyncStatus.wrap
-    async def complete(self) -> None:
-        data = await self._daq.getLine()                        # coroutine — await directly
-        counts = np.asarray(data, dtype=float).ravel()
-        if counts.size != self._row["nx"]:
-            raise ValueError(f"getLine returned {counts.size} values, expected {self._row['nx']}")
-        self._counts = counts
+    def complete(self) -> Status:
+        if self._go_status is None:
+            raise RuntimeError(f"{self.name}: complete() before kickoff()")
+        return self._go_status
 
+    # -- collection ----------------------------------------------------------
     def describe_collect(self) -> dict:
+        if self._row is None:
+            raise RuntimeError(f"{self.name}: describe_collect() before prepare()")
         nx = self._row["nx"]
         return {"primary": {
-            self.X_DATA_KEY: {"source": "sim:linspace", "dtype": "array", "shape": [nx]},
-            self.Y_DATA_KEY: {"source": "sim:y", "dtype": "number", "shape": []},
-            self._name: {"source": "sim:getLine", "dtype": "array", "shape": [nx]},
+            self.X_DATA_KEY: {"source": f"epics:{self.prefix}:POS",
+                              "dtype": "array", "shape": [nx]},
+            self.Y_DATA_KEY: {"source": "epics:y-setpoint",
+                              "dtype": "number", "shape": []},
+            self.name: {"source": f"epics:{self.prefix}:DATA:{_DAQ_KEY}",
+                        "dtype": "array", "shape": [nx]},
         }}
 
     def collect(self) -> Iterator[dict]:
         r = self._row
-        x = np.linspace(r["x_start"], r["x_stop"], r["nx"])
+        idx = int(self.index.get())
+        state = self.state.get()
+        if idx != self._index0 + 1 or state != "ARMED":
+            raise RuntimeError(
+                f"{self.name}: line failed (INDEX {self._index0}->{idx}, "
+                f"STATE={state}): {_as_text(self.error.get())}")
+        x = np.asarray(self.pos.get(), dtype=float)[: r["nx"]]
+        counts = np.asarray(self.data.get(), dtype=float)[: r["nx"]]
         ts = _time.time()
         yield {
             "time": ts,
-            "data": {self.X_DATA_KEY: x, self.Y_DATA_KEY: r["y"], self._name: self._counts},
-            "timestamps": {self.X_DATA_KEY: ts, self.Y_DATA_KEY: ts, self._name: ts},
+            "data": {self.X_DATA_KEY: x, self.Y_DATA_KEY: r["y"],
+                     self.name: counts},
+            "timestamps": {self.X_DATA_KEY: ts, self.Y_DATA_KEY: ts,
+                           self.name: ts},
         }

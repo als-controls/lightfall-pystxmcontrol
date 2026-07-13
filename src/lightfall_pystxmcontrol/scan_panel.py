@@ -25,6 +25,10 @@ from lightfall.ui.panels.base import BasePanel, PanelMetadata
 
 from .energy_ranges import EnergyRangesEditor
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def region_to_plan_kwargs(pos: tuple[float, float], size: tuple[float, float]) -> dict:
     """Map a RectROI (pos, size) in motor coords to plan geometry kwargs.
@@ -180,11 +184,52 @@ class STXMScanPanel(BasePanel):
     # ---------------- validation + submit ----------------
 
     def _axis_limits(self, device_name: str) -> tuple[float, float] | None:
-        """Soft limits from the happi entry kwargs (spec §3.3: PystxmAxis
-        exposes no limits on the ophyd device itself)."""
-        info = self._catalog().get_device_by_name(device_name)
+        """Soft limits for an axis.
+
+        Post-EPICS-migration the axes are stock ``ophyd.EpicsMotor``, which
+        exposes soft limits directly (``.limits`` == (LLM, HLM)); read them
+        from the live device when it is connected. Legacy sim happi entries
+        embedded the limits in the entry kwargs (``axis_config``), so fall
+        back to that for old DBs; None if neither source is available.
+        """
+        catalog = self._catalog()
+        try:
+            lo, hi = catalog.get_ophyd_device(device_name).limits
+            lo, hi = float(lo), float(hi)
+            if lo < hi:  # EpicsMotor convention: (0, 0) == limits disabled
+                return lo, hi
+        except Exception:
+            pass
+        info = catalog.get_device_by_name(device_name)
         try:
             cfg = info.metadata["kwargs"]["axis_config"]
+            return float(cfg["minValue"]), float(cfg["maxValue"])
+        except Exception:
+            logger.debug(
+                "no soft limits available for axis %r (neither live device "
+                "nor legacy axis_config); skipping validation for this axis",
+                device_name)
+            return None
+
+    def _x_axis_limits(self) -> tuple[float, float] | None:
+        """Soft limits for the flyer's fast (X) axis.
+
+        The fast axis is a real motor now: resolve its device name from the
+        live flyer's ``X_DATA_KEY`` and reuse :meth:`_axis_limits`. Legacy sim
+        DBs embedded an ``x_axis_config`` dict in the flyer's happi kwargs.
+        """
+        catalog = self._catalog()
+        try:
+            x_name = str(catalog.get_ophyd_device(self._flyer_name).X_DATA_KEY)
+        except Exception:
+            x_name = None
+        if x_name:
+            lim = self._axis_limits(x_name)
+            if lim:
+                return lim
+        info = catalog.get_device_by_name(self._flyer_name)
+        try:
+            cfg = info.metadata["kwargs"]["x_axis_config"]
             return float(cfg["minValue"]), float(cfg["maxValue"])
         except Exception:
             return None
@@ -211,15 +256,11 @@ class STXMScanPanel(BasePanel):
             lo, hi = lim
             if not (lo <= region["y_start"] and region["y_stop"] <= hi):
                 errors.append(f"region Y outside soft limits [{lo}, {hi}]")
-        # X limits live on the flyer's embedded fast axis config
-        info = self._catalog().get_device_by_name(self._flyer_name)
-        try:
-            cfg = info.metadata["kwargs"]["x_axis_config"]
-            lo, hi = float(cfg["minValue"]), float(cfg["maxValue"])
+        lim = self._x_axis_limits()
+        if lim:
+            lo, hi = lim
             if not (lo <= region["x_start"] and region["x_stop"] <= hi):
                 errors.append(f"region X outside soft limits [{lo}, {hi}]")
-        except Exception:
-            pass
         return errors
 
     def launch(self) -> str | None:

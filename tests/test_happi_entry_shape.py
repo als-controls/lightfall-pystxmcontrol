@@ -1,34 +1,41 @@
-"""Verify a pystxm ophyd-async device can be constructed from a happi entry."""
-import asyncio
-import json
+"""Verify the packaged happi entries have the expected device_class/prefix shape."""
+from importlib.resources import files
 
 import happi
 from happi.backends.json_db import JSONBackend
 
-from lightfall_pystxmcontrol import config
-from lightfall_pystxmcontrol.devices import PystxmAxis
+
+def _client():
+    db_path = str(files("lightfall_pystxmcontrol").joinpath("pystxm_happi.json"))
+    return happi.Client(database=JSONBackend(db_path))
 
 
-def _client(tmp_path):
-    db = tmp_path / "one.json"
-    db.write_text(json.dumps({}))
-    return happi.Client(database=JSONBackend(str(db)))
+def _item(client, name):
+    return client.search(name=name)[0].item
 
 
-def test_happi_constructs_pystxm_axis_with_config(tmp_path):
-    client = _client(tmp_path)
-    client.add_item(happi.OphydItem(
-        name="SampleX",
-        device_class="lightfall_pystxmcontrol.devices.PystxmAxis",
-        args=[],
-        prefix="",
-        kwargs={"name": "{{name}}", "axis_config": config.DEFAULT_AXES["SampleX"]},
-        active=True,
-    ))
-    result = client.search()[0]
-    dev = result.get()
-    assert isinstance(dev, PystxmAxis)
-    assert dev.name == "SampleX"
-    # The config survived as a dict and connect() can build the sim motor.
-    asyncio.run(dev.connect(mock=False))
-    assert dev._axis_config["axis"] == "X"
+def test_axes_are_epics_motor_with_matching_prefix():
+    client = _client()
+    expected_prefixes = {
+        "SampleX": "STXMSIM:E712:SampleX",
+        "SampleY": "STXMSIM:E712:SampleY",
+        "energy": "STXMSIM:XPS:energy",
+    }
+    for name, prefix in expected_prefixes.items():
+        item = _item(client, name)
+        assert item.device_class == "ophyd.EpicsMotor"
+        assert item.prefix == prefix
+
+
+def test_counter_entry_shape():
+    client = _client()
+    item = _item(client, "Counter1")
+    assert item.device_class == "lightfall_pystxmcontrol.devices.StxmCounter"
+    assert item.prefix == "STXMSIM:DEFAULT"
+
+
+def test_flyer_entry_shape():
+    client = _client()
+    item = _item(client, "STXMLineFlyer")
+    assert item.device_class == "lightfall_pystxmcontrol.flyer.StxmLineFlyer"
+    assert item.prefix == "STXMSIM:E712:FLY"

@@ -16,36 +16,10 @@ def test_plan_info_exposes_expected_parameters():
             "x_start", "x_stop", "nx", "dwell"} == param_names
 
 
-def test_adapter_delegates_to_pure_plan():
-    # The adapter must yield the same message stream as the pure plan for the
-    # same inputs. Build a connected flyer + slow axis and compare doc-name
-    # sequences over a bare RunEngine (one event_page per line).
-    import asyncio
-    from bluesky import RunEngine
-    from lightfall_pystxmcontrol import config
-    from lightfall_pystxmcontrol.devices import PystxmAxis
-    from lightfall_pystxmcontrol.flyer import PystxmLineFlyer
-
-    plan_func = StxmFlyRasterPlanPlugin().get_plan_function()
-    flyer = PystxmLineFlyer(config.DEFAULT_COUNTER, config.DEFAULT_AXES["SampleX"],
-                            name="STXMLineFlyer")
-    y = PystxmAxis(config.DEFAULT_AXES["SampleY"], name="SampleY")
-
-    async def _c():
-        await flyer.connect(mock=False)
-        await y.connect(mock=False)
-    asyncio.run(_c())
-
-    docs = []
-    RE = RunEngine()
-    RE(plan_func(flyer, y, y_start=-2, y_stop=2, ny=3,
-                 x_start=-4, x_stop=4, nx=8, dwell=1.0),
-       lambda n, d: docs.append((n, d)))
-    names = [n for n, _ in docs]
-    assert names[0] == "start" and names[-1] == "stop"
-    assert names.count("event_page") == 3
-    ev = next(d for n, d in docs if n == "event_page")
-    assert "STXMLineFlyer" in ev["data"]
+# NOTE: test_adapter_delegates_to_pure_plan (RunEngine over live sim devices)
+# was removed here — it built PystxmAxis/PystxmLineFlyer sim-only ophyd-async
+# devices that no longer exist post-EPICS-migration. Equivalent coverage over
+# real EPICS devices (the caproto sim fleet) is restored in Task 5's e2e suite.
 
 
 def test_flyer_device_class_matches_backend_registration():
@@ -56,6 +30,7 @@ def test_flyer_device_class_matches_backend_registration():
     from lightfall.devices.backends.happi import HappiBackend
     from lightfall_pystxmcontrol.plan_plugin import FLYER_DEVICE_CLASS
 
+    assert FLYER_DEVICE_CLASS == "lightfall_pystxmcontrol.flyer.StxmLineFlyer"
     db = str(files("lightfall_pystxmcontrol").joinpath("pystxm_happi.json"))
     backend = HappiBackend(path=db, instantiate="background")
     backend.connect()

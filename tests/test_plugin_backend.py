@@ -18,3 +18,12 @@ def test_create_backend_points_at_packaged_db():
     backend.connect()
     names = {d.name for d in backend.list_devices(active_only=False)}
     assert names == {"SampleX", "SampleY", "Counter1", "STXMLineFlyer", "energy"}
+
+
+def test_axes_are_motor_category():
+    plugin = PystxmBackendPlugin()
+    backend = plugin.create_backend()
+    backend.connect()
+    by_name = {d.name: d for d in backend.list_devices(active_only=False)}
+    for axis in ("SampleX", "SampleY", "energy"):
+        assert "motor" in str(by_name[axis].category).lower()

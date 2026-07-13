@@ -15,12 +15,14 @@ def test_backend_loads_five_devices():
     assert names == {"SampleX", "SampleY", "Counter1", "STXMLineFlyer", "energy"}
 
 
-def test_instantiate_builds_expected_classes():
-    from lightfall_pystxmcontrol.devices import PystxmAxis, PystxmCounter
-    from lightfall_pystxmcontrol.flyer import PystxmLineFlyer
+def test_device_classes_match_epics_devices():
     be = HappiBackend(path=_db_path(), instantiate="background")
     be.connect()
     by_name = {d.name: d for d in be.list_devices(active_only=False)}
-    assert isinstance(be.instantiate(by_name["SampleX"]), PystxmAxis)
-    assert isinstance(be.instantiate(by_name["Counter1"]), PystxmCounter)
-    assert isinstance(be.instantiate(by_name["STXMLineFlyer"]), PystxmLineFlyer)
+    assert by_name["SampleX"].device_class == "ophyd.EpicsMotor"
+    assert by_name["SampleY"].device_class == "ophyd.EpicsMotor"
+    assert by_name["energy"].device_class == "ophyd.EpicsMotor"
+    assert (by_name["Counter1"].device_class
+            == "lightfall_pystxmcontrol.devices.StxmCounter")
+    assert (by_name["STXMLineFlyer"].device_class
+            == "lightfall_pystxmcontrol.flyer.StxmLineFlyer")

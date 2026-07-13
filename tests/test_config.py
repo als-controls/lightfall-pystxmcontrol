@@ -1,12 +1,16 @@
 # tests/test_config.py
+from pathlib import Path
+
 from lightfall_pystxmcontrol import config
 
 
-def test_default_axes_have_required_keys():
-    for name, cfg in config.DEFAULT_AXES.items():
-        assert {"axis", "units", "offset"} <= cfg.keys()
-    assert {"SampleX", "SampleY"} <= config.DEFAULT_AXES.keys()
+def test_sim_motor_json_path_exists():
+    p = Path(config.sim_motor_json())
+    assert p.name == "sim_motor.json"
+    assert p.exists()
 
 
-def test_default_counter_is_simulating():
-    assert config.DEFAULT_COUNTER["simulation"] is True
+def test_sim_daq_json_path_exists():
+    p = Path(config.sim_daq_json())
+    assert p.name == "sim_daq.json"
+    assert p.exists()
