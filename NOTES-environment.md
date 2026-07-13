@@ -544,3 +544,28 @@ threading client (write by index or `data_type=ChannelType.STRING`); on Windows 
 bound to UDP 5064 receives CA searches, hence the supervisor's per-IOC-port mode (default).
 Worktree: `_pystxmcontrol_iocs_wt` (branch `feature/caproto-iocs`, LOCAL). Tests:
 `PYTHONPATH=<worktree> lightfall-venv-python -m pytest tests/iocs -v` (~2 min, 51 tests).
+
+---
+
+## Spec #3 (EPICS environment) — documentation & environment facts (2026-07-13)
+
+**netifaces installed (REQUIRED — 2026-07-12):** The optional caproto dependency `netifaces`
+is load-bearing for EPICS CA address-list discovery on Windows. Without it, `ophyd_async`
+connections to caproto-backed IOCs fail silently. Installed via `pip install netifaces` in
+the lightfall 3.14 venv. The plugin guard in `epics_env.py::ensure_caproto_layer()` raises
+`ImportError` if it is missing.
+
+**OPHYD_CONTROL_LAYER=caproto:** Set by `epics_env.ensure_caproto_layer()` on first import
+of the plugin. Can also be set explicitly in the environment before importing ophyd-async.
+
+**Tests depend on PYSTXMCONTROL_IOCS_SRC:** The session-scoped `stxm_fleet` fixture (in
+`tests/conftest.py`) spawns the full IOC fleet as subprocess instances. It requires the
+pystxmcontrol fork with the caproto IOC layer at the path given by the environment variable
+`PYSTXMCONTROL_IOCS_SRC`, or defaults to `_pystxmcontrol_iocs_wt`. If the path or branch
+is wrong, pytest fails with a clear message.
+
+**Fleet fixture behavior:** `stxm_fleet` spawns approximately 4 IOC subprocesses (one per
+controller type: motors, DAQ, etc.), each on a random ephemeral UDP port in the range
+40000–60000. `EPICS_CA_ADDR_LIST` and `EPICS_CA_AUTO_ADDR_LIST=NO` are set in each
+subprocess environment so clients can locate all IOCs. The fixture lifetime is per-session;
+teardown kills all subprocesses.
