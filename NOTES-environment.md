@@ -526,3 +526,21 @@ flyer has read(): False  describe(): False  position: False  get(): False  conne
 --- Phase 2b spike complete ---
 ```
 (Preceded by the expected ~10-line pystxmcontrol lazy-import-guard noise + a few loguru INFO/DEBUG lines.)
+
+---
+
+## Spec #2 (caproto IOCs) — deps added to the lightfall 3.14 venv (2026-07-12)
+
+| Package | Needed by |
+|---|---|
+| `matplotlib` | mclController/fccd_control import guard (driver availability for config tests) |
+| `pylibftdi` | bcs/npt/mmc controller imports |
+| `pipython` | E712Controller (sim + hardware; required for e2e fly tests — must NOT skip) |
+
+caproto 1.3.0 / ophyd 1.11.1 were already present. Test env facts: per-test random CA ports need BOTH
+`EPICS_CAS_SERVER_PORT` (server bind, caproto also honors `EPICS_CA_SERVER_PORT`) and client
+`EPICS_CA_ADDR_LIST=127.0.0.1:<port>`; enum PVs cannot be written as bare strings from caproto's
+threading client (write by index or `data_type=ChannelType.STRING`); on Windows only one process
+bound to UDP 5064 receives CA searches, hence the supervisor's per-IOC-port mode (default).
+Worktree: `_pystxmcontrol_iocs_wt` (branch `feature/caproto-iocs`, LOCAL). Tests:
+`PYTHONPATH=<worktree> lightfall-venv-python -m pytest tests/iocs -v` (~2 min, 51 tests).
