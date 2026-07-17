@@ -77,17 +77,87 @@ def test_flyer_is_preparable(flyer):
 def test_prepare_returns_status_that_resolves_success(flyer):
     from ophyd.status import Status
     st = flyer.prepare(y=0.0, x_start=-1.0, x_stop=1.0, nx=4, dwell=1.0)
+    # prepare() runs its blocking CA puts on a background thread and hands
+    # back a Status the caller awaits (rather than blocking in-line). We do
+    # not assert st.done is False here -- the sim worker can resolve in
+    # <10ms, so that would be racy -- only that it is a Status that resolves.
     assert isinstance(st, Status)
-    # Best-effort: the blocking CA puts run on a background thread, so the
-    # Status returned to the caller should not already be resolved -- the
-    # first of 4x10s config-put waits cannot have completed synchronously.
-    assert not st.done
     st.wait(timeout=60)
     assert st.success
     # the flyer is left in a usable, ARMED state after the Status resolves
     flyer.kickoff().wait(timeout=30)
     flyer.complete().wait(timeout=60)
     list(flyer.collect())
+
+
+def test_overlapping_prepare_second_call_wins(flyer, monkeypatch):
+    """A second prepare() issued before the first's worker finishes must win:
+    the superseded first worker must not clobber _row/_index0 nor report
+    success against the newer call (epoch/lost-update guard).
+
+    We deterministically hold the FIRST worker at its ARM step (past its
+    config puts, so it isn't holding an ophyd per-signal set lock -- that
+    lock is a *separate* guard that would otherwise non-deterministically
+    decide which worker's set() collides first). While the first worker is
+    parked, the second prepare runs to completion and takes over the state;
+    then we release the first worker and confirm it no-ops rather than
+    corrupting the second's row.
+    """
+    import threading
+    import time as _t
+    from ophyd.status import Status
+
+    release = threading.Event()
+    seen_arm = []
+    original_arm_set = flyer.arm.set
+
+    def gated_arm_set(*args, **kwargs):
+        seen_arm.append(1)
+        if len(seen_arm) == 1:  # the first worker: park here until released
+            assert release.wait(timeout=30), "first worker never released"
+        return original_arm_set(*args, **kwargs)
+
+    monkeypatch.setattr(flyer.arm, "set", gated_arm_set)
+
+    first = flyer.prepare(y=1.0, x_start=-1.0, x_stop=1.0, nx=4, dwell=1.0)
+    assert isinstance(first, Status)
+    # Wait until the first worker has finished its 4 config puts and reached
+    # the (gated) ARM -- guarantees its sets are done, so the second worker's
+    # sets won't collide with them on the ophyd per-signal lock.
+    for _ in range(500):
+        if seen_arm:
+            break
+        _t.sleep(0.01)
+    assert seen_arm, "first worker never reached ARM"
+
+    # Second prepare now runs cleanly to completion and must win.
+    second = flyer.prepare(y=2.0, x_start=-2.0, x_stop=2.0, nx=7, dwell=1.0)
+    assert isinstance(second, Status)
+    second.wait(timeout=60)
+    assert second.success
+    assert flyer._row["nx"] == 7  # second's state is live
+    index0_after_second = flyer._index0
+
+    # Release the parked first worker: it will ARM, see STATE=ARMED, then
+    # find its captured epoch stale -> must NOT overwrite _row/_index0 and
+    # must fail (not succeed) its own now-orphaned Status.
+    release.set()
+    exc = first.exception(timeout=60)  # blocks until done
+    assert first.done, "superseded prepare() Status left unresolved"
+    assert not first.success, "stale first prepare wrongly reported success"
+    assert isinstance(exc, RuntimeError)
+
+    # Ground truth: the stale worker did NOT clobber the second's row.
+    assert flyer._row["nx"] == 7
+    assert flyer._row["y"] == pytest.approx(2.0)
+    assert flyer._index0 == index0_after_second
+
+    # Recovery: a fresh, un-raced prepare/cycle still works end-to-end.
+    flyer.prepare(y=0.0, x_start=-1.0, x_stop=1.0, nx=5, dwell=1.0).wait(timeout=60)
+    flyer.kickoff().wait(timeout=30)
+    flyer.complete().wait(timeout=60)
+    (event,) = list(flyer.collect())
+    assert len(event["data"]["Counter1"]) == 5
 
 
 def test_prepare_status_carries_arm_failure(flyer):

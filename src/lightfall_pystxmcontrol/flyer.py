@@ -60,6 +60,19 @@ class StxmLineFlyer(Device, Flyable, Collectable, Preparable):
         self._row = None
         self._index0 = None
         self._go_status = None
+        # Monotonic prepare() generation: incremented synchronously at the
+        # top of every prepare() so a still-in-flight worker from a
+        # superseded call can detect it has been overtaken and no-op instead
+        # of clobbering the newer call's _row/_index0 (lost-update guard for
+        # callers that don't honor bps.prepare(wait=True) -- interactive or
+        # future direct use).
+        self._prepare_epoch = 0
+        # Guards the epoch bump + state reset in prepare() against the
+        # epoch-check + state write in its worker thread, so the two are
+        # atomic w.r.t. each other (a bare check-then-write would leave a
+        # few-bytecode window in which a superseded worker could still
+        # clobber the newer call's _row/_index0).
+        self._prepare_lock = threading.Lock()
         # complete()'s STATE/ERROR failure path uses ONE persistent
         # subscription for the object's lifetime (rather than
         # subscribing/unsubscribing per complete() call): rapid subscribe/
@@ -84,10 +97,17 @@ class StxmLineFlyer(Device, Flyable, Collectable, Preparable):
         # Invalidate synchronously at entry: any failure below (or any call
         # to kickoff()/complete() while this prepare() is still running on
         # the background thread) must observe an un-prepared flyer rather
-        # than stale state from a previous row.
-        self._row = None
-        self._index0 = None
-        self._go_status = None
+        # than stale state from a previous row. Bump the generation under the
+        # lock and capture it in this call's worker; if a newer prepare()
+        # runs before this worker finishes, the captured epoch will no longer
+        # match and the worker no-ops instead of clobbering the newer call's
+        # _row/_index0 (lost-update guard).
+        with self._prepare_lock:
+            self._row = None
+            self._index0 = None
+            self._go_status = None
+            self._prepare_epoch += 1
+            epoch = self._prepare_epoch
 
         st = Status(timeout=60)
 
@@ -104,9 +124,18 @@ class StxmLineFlyer(Device, Flyable, Collectable, Preparable):
                     raise RuntimeError(
                         f"{self.name}: ARM failed (STATE={state}): "
                         f"{_as_text(self.error.get())}")
-                self._row = {"y": float(y), "nx": int(nx),
-                             "dwell_ms": float(dwell)}
-                self._index0 = int(self.index.get())
+                index0 = int(self.index.get())
+                # Epoch-check + state write must be atomic w.r.t. a
+                # concurrent prepare()'s bump + reset (hence the lock): a
+                # superseded worker must not write _row/_index0 over the
+                # newer call's state, nor report success against it.
+                with self._prepare_lock:
+                    if epoch != self._prepare_epoch:
+                        raise RuntimeError(
+                            f"{self.name}: prepare() superseded by a newer call")
+                    self._row = {"y": float(y), "nx": int(nx),
+                                 "dwell_ms": float(dwell)}
+                    self._index0 = index0
             except Exception as exc:  # noqa: BLE001 - surfaced via Status
                 try:
                     st.set_exception(exc)
@@ -152,6 +181,10 @@ class StxmLineFlyer(Device, Flyable, Collectable, Preparable):
         # value before failing -- this answers the question we actually
         # care about ("is the line this Status tracks failing *now*?")
         # instead of trusting a payload that may already be out of date.
+        # (Residual gap: STATE could flip ERROR->non-ERROR between this
+        # callback firing and the reread; the sim IOC never leaves ERROR
+        # without a fresh ARM, so in practice this only trims false
+        # positives, never introduces false negatives.)
         if _as_text(self.state.get()) != "ERROR":
             return
         try:
