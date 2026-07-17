@@ -12,8 +12,8 @@ def _fly_rows(flyer, y_axis, *, y_start, y_stop, ny, x_start, x_stop, nx, dwell_
     in complete() emits no event for that row (spec §4.2)."""
     for y in np.linspace(y_start, y_stop, ny):
         yield from bps.mv(y_axis, y)
-        flyer.prepare(y=float(y), x_start=x_start, x_stop=x_stop,
-                      nx=nx, dwell=dwell_ms)
+        yield from bps.prepare(flyer, y=float(y), x_start=x_start, x_stop=x_stop,
+                                nx=nx, dwell=dwell_ms, wait=True)
         yield from bps.kickoff(flyer, wait=True)
         yield from bps.complete(flyer, wait=True)
         yield from bps.collect(flyer)
