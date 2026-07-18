@@ -5,11 +5,14 @@ from lightfall.plugins import PluginEntry, PluginManifest
 manifest = PluginManifest(
     name="lightfall-pystxmcontrol",
     plugins=[
-        PluginEntry(
-            "device_backend",
-            "pystxmcontrol",
-            "lightfall_pystxmcontrol.plugin:PystxmBackendPlugin",
-        ),
+        # Simulated STXM device backend (pystxm_happi.json — STXMSIM:* devices).
+        # Disabled: moving to integration testing against real hardware, which is
+        # provided by a separate device backend. Re-enable to restore sim devices.
+        # PluginEntry(
+        #     "device_backend",
+        #     "pystxmcontrol",
+        #     "lightfall_pystxmcontrol.plugin:PystxmBackendPlugin",
+        # ),
         PluginEntry(
             "plan",
             "stxm_fly_raster",
