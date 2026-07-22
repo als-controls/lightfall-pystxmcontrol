@@ -54,5 +54,20 @@ manifest = PluginManifest(
             "stxm_data_analysis",
             "lightfall_pystxmcontrol.agents.stxm_data_analysis:StxmDataAnalysisAgent",
         ),
+        PluginEntry(
+            "agent",
+            "stxm_alignment_focus",
+            "lightfall_pystxmcontrol.agents.stxm_alignment_focus:StxmAlignmentFocusAgent",
+        ),
+        PluginEntry(
+            "agent",
+            "stxm_sample_exchange",
+            "lightfall_pystxmcontrol.agents.stxm_sample_exchange:StxmSampleExchangeAgent",
+        ),
+        PluginEntry(
+            "agent",
+            "stxm_troubleshooting",
+            "lightfall_pystxmcontrol.agents.stxm_troubleshooting:StxmTroubleshootingAgent",
+        ),
     ],
 )
