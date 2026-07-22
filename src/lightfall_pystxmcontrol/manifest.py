@@ -44,5 +44,10 @@ manifest = PluginManifest(
             "stxm_scan_setup",
             "lightfall_pystxmcontrol.agents.stxm_scan_setup:StxmScanSetupAgent",
         ),
+        PluginEntry(
+            "agent",
+            "stxm_technique_guide",
+            "lightfall_pystxmcontrol.agents.stxm_technique_guide:StxmTechniqueGuideAgent",
+        ),
     ],
 )
