@@ -1,11 +1,12 @@
 # tests/test_agent_plugins.py
 import pytest
 
+from lightfall_pystxmcontrol.agents.stxm_data_analysis import StxmDataAnalysisAgent
 from lightfall_pystxmcontrol.agents.stxm_scan_setup import StxmScanSetupAgent
 from lightfall_pystxmcontrol.agents.stxm_technique_guide import StxmTechniqueGuideAgent
 from lightfall_pystxmcontrol.manifest import manifest
 
-AGENT_CLASSES = [StxmScanSetupAgent, StxmTechniqueGuideAgent]
+AGENT_CLASSES = [StxmScanSetupAgent, StxmTechniqueGuideAgent, StxmDataAnalysisAgent]
 
 
 @pytest.fixture(params=AGENT_CLASSES, ids=lambda c: c.__name__)
@@ -15,7 +16,7 @@ def agent(request):
 
 def test_identity(agent):
     assert agent.name and agent.name == agent.name.lower()
-    assert agent.category == "acquisition"
+    assert agent.category in ("acquisition", "analysis", "operations")
     assert agent.get_system_prompt().strip()
     assert agent.description
 

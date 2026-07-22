@@ -49,5 +49,10 @@ manifest = PluginManifest(
             "stxm_technique_guide",
             "lightfall_pystxmcontrol.agents.stxm_technique_guide:StxmTechniqueGuideAgent",
         ),
+        PluginEntry(
+            "agent",
+            "stxm_data_analysis",
+            "lightfall_pystxmcontrol.agents.stxm_data_analysis:StxmDataAnalysisAgent",
+        ),
     ],
 )
