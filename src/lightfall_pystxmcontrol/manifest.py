@@ -39,5 +39,10 @@ manifest = PluginManifest(
         PluginEntry("panel", "stxm_spectrum",
                     "lightfall_pystxmcontrol.stxm_spectrum_panel:StxmSpectrumPanelPlugin",
                     preload=True),
+        PluginEntry(
+            "agent",
+            "stxm_scan_setup",
+            "lightfall_pystxmcontrol.agents.stxm_scan_setup:StxmScanSetupAgent",
+        ),
     ],
 )
