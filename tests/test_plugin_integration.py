@@ -41,9 +41,15 @@ def test_entry_point_registered():
     assert isinstance(loaded, PluginManifest), (
         f"Expected PluginManifest, got {type(loaded)}"
     )
+    # The sim device_backend entry is intentionally disabled in the manifest
+    # (integration testing runs against real hardware); make sure it stays out.
+    assert not any(
+        isinstance(p, PluginEntry) and p.type_name == "device_backend"
+        for p in loaded.plugins
+    ), f"Sim device_backend should be disabled, found: {loaded.plugins}"
     assert any(
         isinstance(p, PluginEntry)
-        and p.type_name == "device_backend"
-        and p.name == "pystxmcontrol"
+        and p.type_name == "plan"
+        and p.name == "stxm_fly_raster"
         for p in loaded.plugins
-    ), f"No matching PluginEntry found in manifest.plugins: {loaded.plugins}"
+    ), f"No stxm_fly_raster PluginEntry found in manifest.plugins: {loaded.plugins}"
