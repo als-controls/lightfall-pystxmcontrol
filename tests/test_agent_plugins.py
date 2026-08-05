@@ -29,10 +29,14 @@ def agent(request):
     return request.param()
 
 
+def _skill_body(agent) -> str:
+    return (agent.get_skill_dir() / "SKILL.md").read_text(encoding="utf-8")
+
+
 def test_identity(agent):
     assert agent.name and agent.name == agent.name.lower()
     assert agent.category in ("acquisition", "analysis", "operations")
-    assert agent.get_system_prompt().strip()
+    assert _skill_body(agent).strip()
     assert agent.description
 
 
@@ -48,7 +52,7 @@ def test_references_ship_with_package(agent):
 def test_prompt_mentions_each_reference_file(agent):
     # If a reference is renamed without updating the prompt, the agent can't
     # find it — keep the pointers honest.
-    prompt = agent.get_system_prompt()
+    prompt = _skill_body(agent)
     for p in agent.get_references_dir().iterdir():
         assert p.name in prompt
 
@@ -56,7 +60,7 @@ def test_prompt_mentions_each_reference_file(agent):
 def test_manifest_registers_agent_entries():
     entries = {(e.type_name, e.name) for e in manifest.plugins}
     for cls in AGENT_CLASSES:
-        assert ("agent", cls().name) in entries
+        assert ("tool", cls().name) in entries
 
 
 def test_scan_setup_expected_reference_names():
@@ -75,7 +79,7 @@ def test_operations_skills_state_safety_posture(cls):
     # the agent actuates hardware; keep the safety framing present.
     plugin = cls()
     assert plugin.category == "operations"
-    prompt = plugin.get_system_prompt().lower()
+    prompt = _skill_body(plugin).lower()
     assert "operator" in prompt or "human" in prompt
 
 
@@ -87,6 +91,6 @@ def test_no_credentials_in_skill_content():
     pattern = re.compile(r"password|passwd", re.IGNORECASE)
     for cls in AGENT_CLASSES:
         plugin = cls()
-        assert not pattern.search(plugin.get_system_prompt())
+        assert not pattern.search(_skill_body(plugin))
         for p in plugin.get_references_dir().iterdir():
             assert not pattern.search(p.read_text(encoding="utf-8")), p

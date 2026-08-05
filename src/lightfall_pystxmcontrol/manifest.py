@@ -43,32 +43,32 @@ manifest = PluginManifest(
                     "lightfall_pystxmcontrol.stxm_spectrum_panel:StxmSpectrumPanelPlugin",
                     preload=True),
         PluginEntry(
-            "agent",
+            "tool",
             "stxm_scan_setup",
             "lightfall_pystxmcontrol.agents.stxm_scan_setup:StxmScanSetupAgent",
         ),
         PluginEntry(
-            "agent",
+            "tool",
             "stxm_technique_guide",
             "lightfall_pystxmcontrol.agents.stxm_technique_guide:StxmTechniqueGuideAgent",
         ),
         PluginEntry(
-            "agent",
+            "tool",
             "stxm_data_analysis",
             "lightfall_pystxmcontrol.agents.stxm_data_analysis:StxmDataAnalysisAgent",
         ),
         PluginEntry(
-            "agent",
+            "tool",
             "stxm_alignment_focus",
             "lightfall_pystxmcontrol.agents.stxm_alignment_focus:StxmAlignmentFocusAgent",
         ),
         PluginEntry(
-            "agent",
+            "tool",
             "stxm_sample_exchange",
             "lightfall_pystxmcontrol.agents.stxm_sample_exchange:StxmSampleExchangeAgent",
         ),
         PluginEntry(
-            "agent",
+            "tool",
             "stxm_troubleshooting",
             "lightfall_pystxmcontrol.agents.stxm_troubleshooting:StxmTroubleshootingAgent",
         ),
