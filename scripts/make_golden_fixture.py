@@ -11,7 +11,7 @@ NOT spawn IOCs itself -- start the fleet first (see
 _pystxmcontrol_iocs_wt/pystxmcontrol/iocs/supervisor.py), then, with
 EPICS_CA_ADDR_LIST set to reach it:
 
-    C:/Users/rp/PycharmProjects/ncs/lightfall/.venv/Scripts/python scripts/make_golden_fixture.py
+    ../lightfall/.venv/Scripts/python scripts/make_golden_fixture.py
 
 The PV names below match the packaged happi DB (tests/test_happi_db.py):
 SampleY -> STXMSIM:E712:SampleY, energy -> STXMSIM:XPS:energy,

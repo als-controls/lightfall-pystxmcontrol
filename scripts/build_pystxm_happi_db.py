@@ -13,10 +13,9 @@ import os
 import sys
 from pathlib import Path
 
-DEFAULT_IOCS_SRC = Path(
-    r"C:\Users\rp\PycharmProjects\ncs\lightfall-pystxmcontrol\_pystxmcontrol_iocs_wt")
-OUT = (Path(__file__).resolve().parents[1]
-       / "src" / "lightfall_pystxmcontrol" / "pystxm_happi.json")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_IOCS_SRC = REPO_ROOT / "_pystxmcontrol_iocs_wt"
+OUT = REPO_ROOT / "src" / "lightfall_pystxmcontrol" / "pystxm_happi.json"
 
 
 def build(station: str, iocs_src: Path) -> None:

@@ -40,8 +40,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_IOCS_SRC = Path(
-    r"C:\Users\rp\PycharmProjects\ncs\lightfall-pystxmcontrol\_pystxmcontrol_iocs_wt")
+_DEFAULT_IOCS_SRC = REPO_ROOT / "_pystxmcontrol_iocs_wt"
 
 
 @pytest.fixture(scope="session")
